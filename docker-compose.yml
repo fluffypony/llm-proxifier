@@ -1,0 +1,42 @@
+version: '3.8'
+
+services:
+  llm-proxifier:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"  # Proxy server
+      - "3000:3000"  # Monitoring dashboard
+    volumes:
+      - ./config:/app/config:ro
+      - ./models:/app/models:ro
+      - model-data:/app/data
+    environment:
+      - PROXY_HOST=0.0.0.0
+      - PROXY_PORT=8000
+      - DASHBOARD_PORT=3000
+      - TIMEOUT_MINUTES=2
+      - MAX_CONCURRENT_MODELS=4
+      - CONFIG_PATH=/app/config/models.yaml
+      - AUTH_CONFIG_PATH=/app/config/auth.yaml
+      - LOG_LEVEL=INFO
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 32G
+          cpus: '16.0'
+        reservations:
+          memory: 4G
+          cpus: '2.0'
+
+volumes:
+  model-data:
+    driver: local
