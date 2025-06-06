@@ -10,6 +10,10 @@ PROXY_HOST="${PROXY_HOST:-0.0.0.0}"
 PROXY_PORT="${PROXY_PORT:-8000}"
 CONFIG_PATH="${CONFIG_PATH:-./config/models.yaml}"
 LOG_LEVEL="${LOG_LEVEL:-INFO}"
+DASHBOARD_PORT="${DASHBOARD_PORT:-3000}"
+AUTH_CONFIG="${AUTH_CONFIG:-./config/auth.yaml}"
+ENABLE_DASHBOARD="${ENABLE_DASHBOARD:-true}"
+DISABLE_AUTH="${DISABLE_AUTH:-false}"
 
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do
@@ -30,6 +34,22 @@ while [[ $# -gt 0 ]]; do
             LOG_LEVEL="$2"
             shift 2
             ;;
+        --dashboard-port)
+            DASHBOARD_PORT="$2"
+            shift 2
+            ;;
+        --auth-config)
+            AUTH_CONFIG="$2"
+            shift 2
+            ;;
+        --enable-dashboard)
+            ENABLE_DASHBOARD="true"
+            shift
+            ;;
+        --disable-auth)
+            DISABLE_AUTH="true"
+            shift
+            ;;
         --help)
             echo "Usage: $0 [options]"
             echo "Options:"
@@ -37,6 +57,10 @@ while [[ $# -gt 0 ]]; do
             echo "  -p, --port PORT        Port to bind to (default: 8000)"
             echo "  -c, --config PATH      Path to models config (default: ./config/models.yaml)"
             echo "  -l, --log-level LEVEL  Log level (default: INFO)"
+            echo "  --dashboard-port PORT  Dashboard port (default: 3000)"
+            echo "  --auth-config PATH     Path to auth config (default: ./config/auth.yaml)"
+            echo "  --enable-dashboard     Enable dashboard (default: true)"
+            echo "  --disable-auth         Disable authentication for development"
             echo "  --help                 Show this help message"
             exit 0
             ;;
@@ -73,12 +97,20 @@ export PROXY_HOST="$PROXY_HOST"
 export PROXY_PORT="$PROXY_PORT"
 export CONFIG_PATH="$CONFIG_PATH"
 export LOG_LEVEL="$LOG_LEVEL"
+export DASHBOARD_PORT="$DASHBOARD_PORT"
+export AUTH_CONFIG_PATH="$AUTH_CONFIG"
+export DASHBOARD_ENABLED="$ENABLE_DASHBOARD"
+export AUTH_ENABLED="$([ "$DISABLE_AUTH" = "true" ] && echo "false" || echo "true")"
 
 echo "Starting LLM Proxifier..."
 echo "Host: $PROXY_HOST"
 echo "Port: $PROXY_PORT"
 echo "Config: $CONFIG_PATH"
+echo "Auth Config: $AUTH_CONFIG"
 echo "Log Level: $LOG_LEVEL"
+echo "Dashboard Port: $DASHBOARD_PORT"
+echo "Dashboard Enabled: $ENABLE_DASHBOARD"
+echo "Auth Enabled: $AUTH_ENABLED"
 echo ""
 
 # Start the server
