@@ -5,6 +5,10 @@ models:
     context_length: 32768
     gpu_layers: -1
     chat_format: chatml
+    auto_start: false
+    preload: false
+    priority: 1
+    resource_group: "large-models"
     additional_args:
       - "--mlock"
       - "--n_batch=512"
@@ -15,6 +19,10 @@ models:
     context_length: 16384
     gpu_layers: -1
     chat_format: chatml
+    auto_start: true
+    preload: true
+    priority: 10
+    resource_group: "lite-models"
     additional_args:
       - "--mlock"
 
@@ -24,6 +32,10 @@ models:
     context_length: 32768
     gpu_layers: -1
     chat_format: chatml
+    auto_start: true
+    preload: false
+    priority: 5
+    resource_group: "medium-models"
     additional_args:
       - "--mlock"
 
@@ -33,6 +45,10 @@ models:
     context_length: 8192
     gpu_layers: -1
     chat_format: llama-2
+    auto_start: false
+    preload: false
+    priority: 1
+    resource_group: "large-models"
     additional_args:
       - "--mlock"
       - "--threads=16"

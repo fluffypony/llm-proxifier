@@ -16,6 +16,10 @@ class ModelConfig:
     context_length: int = 4096
     gpu_layers: int = -1
     chat_format: str = "chatml"
+    auto_start: bool = False
+    preload: bool = False
+    priority: int = 5
+    resource_group: str = "default"
     additional_args: List[str] = field(default_factory=list)
     
     def __post_init__(self):
