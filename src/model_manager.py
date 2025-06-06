@@ -4,7 +4,7 @@ import asyncio
 import logging
 import time
 from datetime import datetime, timedelta
-from typing import Dict, Optional, List
+from typing import Dict, Optional, List, Any
 import subprocess
 from dataclasses import dataclass
 
@@ -484,6 +484,68 @@ class ModelManager:
                     "models": [m.name for m in models]
                 }
             return status
+    
+    async def reload_model(self, model_name: str, new_config: Optional[ModelConfig] = None) -> Dict[str, Any]:
+        """Hot reload a specific model with optional new configuration."""
+        async with self.lock:
+            if model_name not in self.configs and not new_config:
+                return {"success": False, "error": f"Model {model_name} not configured"}
+            
+            # Use new config if provided, otherwise use current config
+            config = new_config or self.configs[model_name]
+            was_running = model_name in self.models and self.models[model_name].is_ready
+            
+            # Stop existing model if running
+            if model_name in self.models:
+                await self.models[model_name].stop()
+                del self.models[model_name]
+            
+            # Update config if new one provided
+            if new_config:
+                self.configs[model_name] = new_config
+            
+            # Start with new configuration if it was running before
+            if was_running:
+                instance = ModelInstance(config=config)
+                if await instance.start():
+                    self.models[model_name] = instance
+                    return {
+                        "success": True,
+                        "message": f"Model {model_name} reloaded successfully",
+                        "status": "running"
+                    }
+                else:
+                    return {
+                        "success": False,
+                        "error": f"Failed to start model {model_name} after reload"
+                    }
+            else:
+                return {
+                    "success": True,
+                    "message": f"Model {model_name} configuration updated (not running)",
+                    "status": "stopped"
+                }
+    
+    def reload_model_config(self, new_configs: Dict[str, ModelConfig]) -> Dict[str, Any]:
+        """Reload model configurations and identify changes."""
+        old_configs = dict(self.configs)
+        self.configs = new_configs
+        
+        # Compare changes
+        added = set(new_configs.keys()) - set(old_configs.keys())
+        removed = set(old_configs.keys()) - set(new_configs.keys())
+        modified = set()
+        
+        for name in old_configs.keys() & new_configs.keys():
+            if old_configs[name].__dict__ != new_configs[name].__dict__:
+                modified.add(name)
+        
+        return {
+            "added": list(added),
+            "removed": list(removed),
+            "modified": list(modified),
+            "total_models": len(new_configs)
+        }
 
     async def shutdown_all(self):
         """Gracefully shutdown all models and cleanup tasks."""

@@ -480,6 +480,28 @@ async def reload_auth_config():
         )
 
 
+@app.post("/admin/models/{model_name}/reload")
+async def reload_model(model_name: str):
+    """Hot reload a specific model."""
+    try:
+        result = await model_manager.reload_model(model_name)
+        if result["success"]:
+            return result
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail=format_error_response(400, result["error"], "reload_failed")
+            )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"Error reloading model {model_name}: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=format_error_response(500, str(e), "internal_error")
+        )
+
+
 if __name__ == "__main__":
     import uvicorn
     
