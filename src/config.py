@@ -1,6 +1,7 @@
 """Configuration module for the LLM proxy server."""
 
 import os
+import hashlib
 from dataclasses import dataclass, field
 from typing import List, Dict, Optional
 from datetime import datetime
@@ -42,6 +43,9 @@ class ProxyConfig:
     max_concurrent_models: int = 4
     log_level: str = "INFO"
     config_path: str = "./config/models.yaml"
+    dashboard_port: int = 3000
+    dashboard_enabled: bool = True
+    auth_enabled: bool = True
     
     def __post_init__(self):
         """Validate configuration after initialization."""
@@ -64,6 +68,8 @@ class ConfigManager:
         self.proxy_config = self._load_proxy_config()
         self.auth_config = self._load_auth_config()
         self.model_configs: Dict[str, ModelConfig] = {}
+        self._config_version = None
+        self._auth_version = None
     
     def _load_proxy_config(self) -> ProxyConfig:
         """Load proxy configuration from environment variables."""
@@ -74,7 +80,10 @@ class ConfigManager:
             health_check_interval=int(os.getenv("HEALTH_CHECK_INTERVAL", "30")),
             max_concurrent_models=int(os.getenv("MAX_CONCURRENT_MODELS", "4")),
             log_level=os.getenv("LOG_LEVEL", "INFO"),
-            config_path=self.config_path
+            config_path=self.config_path,
+            dashboard_port=int(os.getenv("DASHBOARD_PORT", "3000")),
+            dashboard_enabled=os.getenv("DASHBOARD_ENABLED", "true").lower() == "true",
+            auth_enabled=os.getenv("AUTH_ENABLED", "true").lower() == "true"
         )
     
     def load_model_configs(self) -> Dict[str, ModelConfig]:
@@ -145,6 +154,31 @@ class ConfigManager:
         """Validate that all model ports are unique."""
         ports = [config.port for config in self.model_configs.values()]
         return len(ports) == len(set(ports))
+    
+    def get_config_hash(self, file_path: str) -> str:
+        """Get hash of configuration file content."""
+        try:
+            with open(file_path, 'rb') as f:
+                content = f.read()
+            return hashlib.md5(content).hexdigest()
+        except FileNotFoundError:
+            return ""
+    
+    def has_config_changed(self) -> bool:
+        """Check if model configuration has changed."""
+        current_hash = self.get_config_hash(self.config_path)
+        if self._config_version != current_hash:
+            self._config_version = current_hash
+            return True
+        return False
+    
+    def has_auth_config_changed(self) -> bool:
+        """Check if auth configuration has changed."""
+        current_hash = self.get_config_hash(self.auth_config_path)
+        if self._auth_version != current_hash:
+            self._auth_version = current_hash
+            return True
+        return False
 
 
 @dataclass
