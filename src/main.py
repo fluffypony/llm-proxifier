@@ -8,10 +8,12 @@ from typing import Dict, Any
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from src.config import ConfigManager
 from src.model_manager import ModelManager
 from src.proxy_handler import ProxyHandler
+from src.dashboard import dashboard_router
 from src.utils import format_error_response, get_system_memory_usage
 
 
@@ -88,6 +90,12 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Mount static files for dashboard
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
+# Include dashboard router
+app.include_router(dashboard_router)
 
 
 @app.exception_handler(Exception)

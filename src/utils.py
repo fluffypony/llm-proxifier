@@ -158,3 +158,20 @@ def get_system_memory_usage() -> Dict[str, float]:
         "used": memory.used / 1024 / 1024 / 1024,  # GB
         "percent": memory.percent
     }
+
+
+def format_uptime(seconds: float) -> str:
+    """Format uptime seconds into human-readable format."""
+    if seconds < 60:
+        return f"{int(seconds)}s"
+    elif seconds < 3600:
+        minutes = int(seconds // 60)
+        return f"{minutes}m"
+    elif seconds < 86400:
+        hours = int(seconds // 3600)
+        minutes = int((seconds % 3600) // 60)
+        return f"{hours}h {minutes}m"
+    else:
+        days = int(seconds // 86400)
+        hours = int((seconds % 86400) // 3600)
+        return f"{days}d {hours}h"
