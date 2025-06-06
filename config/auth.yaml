@@ -1,0 +1,34 @@
+# Authentication Configuration for LLM Proxifier
+authentication:
+  enabled: false  # Set to true to enable authentication
+  
+  # API Keys for access control
+  api_keys:
+    - key: "llm-proxy-admin-key-12345"
+      name: "Admin Key"
+      permissions: ["*"]  # Full access
+      expires: null  # Never expires
+      
+    - key: "llm-proxy-readonly-key-67890"
+      name: "Read-Only Key"
+      permissions: ["/health", "/metrics", "/v1/models", "/dashboard"]
+      expires: "2025-12-31"  # Expires on this date
+      
+    - key: "llm-proxy-inference-key-abcde"
+      name: "Inference Only Key"
+      permissions: ["/v1/chat/completions", "/v1/completions", "/v1/models"]
+      expires: null
+
+  # Endpoints that bypass authentication (when auth is enabled)
+  public_endpoints:
+    - "/health"
+    - "/metrics"
+    
+  # Require authentication for dashboard
+  dashboard_auth_required: true
+  
+  # Rate limiting (requests per minute per key)
+  rate_limits:
+    default: 100
+    admin: 1000
+    readonly: 50
