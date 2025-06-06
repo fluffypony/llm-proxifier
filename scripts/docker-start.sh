@@ -9,12 +9,18 @@ CONFIG_DIR=${CONFIG_DIR:-"./config"}
 PROXY_PORT=${PROXY_PORT:-8000}
 DASHBOARD_PORT=${DASHBOARD_PORT:-3000}
 CONTAINER_NAME=${CONTAINER_NAME:-"llm-proxifier"}
+AUTH_CONFIG_PATH=${AUTH_CONFIG_PATH:-"./config/auth.yaml"}
+DASHBOARD_ENABLED=${DASHBOARD_ENABLED:-"true"}
+AUTH_ENABLED=${AUTH_ENABLED:-"true"}
 
 echo "Starting LLM Proxifier container..."
 echo "Models directory: $MODELS_DIR"
 echo "Config directory: $CONFIG_DIR"
 echo "Proxy port: $PROXY_PORT"
 echo "Dashboard port: $DASHBOARD_PORT"
+echo "Auth config path: $AUTH_CONFIG_PATH"
+echo "Dashboard enabled: $DASHBOARD_ENABLED"
+echo "Auth enabled: $AUTH_ENABLED"
 
 # Check if directories exist
 if [ ! -d "$MODELS_DIR" ]; then
@@ -42,6 +48,9 @@ docker run -d \
     -v "$CONFIG_DIR:/app/config:ro" \
     -e PROXY_PORT=8000 \
     -e DASHBOARD_PORT=3000 \
+    -e AUTH_CONFIG_PATH="$AUTH_CONFIG_PATH" \
+    -e DASHBOARD_ENABLED="$DASHBOARD_ENABLED" \
+    -e AUTH_ENABLED="$AUTH_ENABLED" \
     --restart unless-stopped \
     llm-proxifier:latest
 
