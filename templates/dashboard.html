@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LLM Proxifier Dashboard</title>
+    <link rel="stylesheet" href="/static/css/dashboard.css">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1>🚀 LLM Proxifier Dashboard</h1>
+            <div class="header-controls">
+                <div class="theme-toggle">
+                    <button id="theme-toggle" aria-label="Toggle dark mode">🌙</button>
+                </div>
+                <div class="refresh-controls">
+                    <button id="refresh-btn" class="btn btn-secondary">🔄 Refresh</button>
+                    <label class="auto-refresh">
+                        <input type="checkbox" id="auto-refresh" checked>
+                        Auto-refresh (5s)
+                    </label>
+                </div>
+            </div>
+        </header>
+
+        <div class="system-overview">
+            <h2>System Overview</h2>
+            <div class="overview-cards">
+                <div class="card">
+                    <h3>Active Models</h3>
+                    <div class="stat" id="active-models">0 / 0</div>
+                </div>
+                <div class="card">
+                    <h3>System Memory</h3>
+                    <div class="stat" id="system-memory">0 GB</div>
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="memory-progress"></div>
+                    </div>
+                </div>
+                <div class="card">
+                    <h3>Model Memory</h3>
+                    <div class="stat" id="model-memory">0 MB</div>
+                </div>
+                <div class="card">
+                    <h3>Status</h3>
+                    <div class="stat" id="system-status">
+                        <span class="status-indicator online"></span> Online
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="models-section">
+            <div class="section-header">
+                <h2>Model Status</h2>
+                <div class="section-controls">
+                    <button id="start-all-btn" class="btn btn-primary">Start All</button>
+                    <button id="stop-all-btn" class="btn btn-danger">Stop All</button>
+                </div>
+            </div>
+            <div class="models-grid" id="models-grid">
+                <!-- Model cards will be dynamically inserted here -->
+            </div>
+        </div>
+
+        <div class="logs-section">
+            <h2>Connection Status</h2>
+            <div class="connection-status">
+                <span id="ws-status" class="status-indicator offline"></span>
+                <span id="ws-status-text">Connecting...</span>
+                <span class="last-update">Last update: <span id="last-update">Never</span></span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal for confirmations -->
+    <div id="modal" class="modal">
+        <div class="modal-content">
+            <h3 id="modal-title">Confirm Action</h3>
+            <p id="modal-message">Are you sure?</p>
+            <div class="modal-buttons">
+                <button id="modal-confirm" class="btn btn-primary">Confirm</button>
+                <button id="modal-cancel" class="btn btn-secondary">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/dashboard.js"></script>
+</body>
+</html>
