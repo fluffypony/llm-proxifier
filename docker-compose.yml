@@ -21,6 +21,8 @@ services:
       - CONFIG_PATH=/app/config/models.yaml
       - AUTH_CONFIG_PATH=/app/config/auth.yaml
       - LOG_LEVEL=INFO
+      - DASHBOARD_ENABLED=true
+      - AUTH_ENABLED=true
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
