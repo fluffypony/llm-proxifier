@@ -64,6 +64,12 @@ async def lifespan(app: FastAPI):
         # Start cleanup task
         await model_manager.start_cleanup_task()
         
+        # Start auto-start models
+        await model_manager.start_all_auto_models()
+        
+        # Preload models
+        await model_manager.preload_models()
+        
         logger.info(f"LLM Proxy Server started on {proxy_config.host}:{proxy_config.port}")
         
     except Exception as e:
@@ -311,6 +317,163 @@ async def get_model_status(model_name: str):
         raise
     except Exception as e:
         logging.error(f"Error getting model status {model_name}: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=format_error_response(500, str(e), "internal_error")
+        )
+
+
+@app.post("/admin/models/start-all")
+async def start_all_models():
+    """Start all configured models."""
+    try:
+        results = await model_manager.start_all_models()
+        success_count = sum(1 for success in results.values() if success)
+        return {
+            "message": f"Started {success_count}/{len(results)} models",
+            "results": results
+        }
+    except Exception as e:
+        logging.error(f"Error starting all models: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=format_error_response(500, str(e), "internal_error")
+        )
+
+
+@app.post("/admin/models/stop-all")
+async def stop_all_models():
+    """Stop all running models except preloaded ones."""
+    try:
+        results = await model_manager.stop_all_models()
+        success_count = sum(1 for success in results.values() if success)
+        return {
+            "message": f"Stopped {success_count}/{len(results)} models",
+            "results": results
+        }
+    except Exception as e:
+        logging.error(f"Error stopping all models: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=format_error_response(500, str(e), "internal_error")
+        )
+
+
+@app.post("/admin/models/restart-all")
+async def restart_all_models():
+    """Restart all currently running models."""
+    try:
+        results = await model_manager.restart_all_models()
+        success_count = sum(1 for success in results.values() if success)
+        return {
+            "message": f"Restarted {success_count}/{len(results)} models",
+            "results": results
+        }
+    except Exception as e:
+        logging.error(f"Error restarting all models: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=format_error_response(500, str(e), "internal_error")
+        )
+
+
+@app.post("/admin/groups/{group_name}/start")
+async def start_resource_group(group_name: str):
+    """Start all models in specified resource group."""
+    try:
+        results = await model_manager.start_resource_group(group_name)
+        success_count = sum(1 for success in results.values() if success)
+        return {
+            "message": f"Started {success_count}/{len(results)} models in group '{group_name}'",
+            "results": results
+        }
+    except Exception as e:
+        logging.error(f"Error starting resource group {group_name}: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=format_error_response(500, str(e), "internal_error")
+        )
+
+
+@app.post("/admin/groups/{group_name}/stop")
+async def stop_resource_group(group_name: str):
+    """Stop all models in specified resource group."""
+    try:
+        results = await model_manager.stop_resource_group(group_name)
+        success_count = sum(1 for success in results.values() if success)
+        return {
+            "message": f"Stopped {success_count}/{len(results)} models in group '{group_name}'",
+            "results": results
+        }
+    except Exception as e:
+        logging.error(f"Error stopping resource group {group_name}: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=format_error_response(500, str(e), "internal_error")
+        )
+
+
+@app.get("/admin/groups")
+async def list_resource_groups():
+    """List all resource groups and their models."""
+    try:
+        return model_manager.get_resource_group_status()
+    except Exception as e:
+        logging.error(f"Error listing resource groups: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=format_error_response(500, str(e), "internal_error")
+        )
+
+
+@app.post("/admin/models/reload-config")
+async def reload_model_config():
+    """Reload models.yaml configuration."""
+    try:
+        if config_manager.has_config_changed():
+            old_configs = dict(config_manager.model_configs)
+            new_configs = config_manager.load_model_configs()
+            model_manager.load_configs(new_configs)
+            
+            # Compare changes
+            added = set(new_configs.keys()) - set(old_configs.keys())
+            removed = set(old_configs.keys()) - set(new_configs.keys())
+            modified = set()
+            
+            for name in old_configs.keys() & new_configs.keys():
+                if old_configs[name].__dict__ != new_configs[name].__dict__:
+                    modified.add(name)
+            
+            return {
+                "message": "Configuration reloaded",
+                "changes": {
+                    "added": list(added),
+                    "removed": list(removed),
+                    "modified": list(modified)
+                }
+            }
+        else:
+            return {"message": "No configuration changes detected"}
+    except Exception as e:
+        logging.error(f"Error reloading config: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=format_error_response(500, str(e), "internal_error")
+        )
+
+
+@app.post("/admin/auth/reload-config")
+async def reload_auth_config():
+    """Reload auth.yaml configuration."""
+    try:
+        if config_manager.has_auth_config_changed():
+            config_manager.auth_config = config_manager._load_auth_config()
+            auth_manager.update_config(config_manager)
+            return {"message": "Auth configuration reloaded"}
+        else:
+            return {"message": "No auth configuration changes detected"}
+    except Exception as e:
+        logging.error(f"Error reloading auth config: {e}")
         raise HTTPException(
             status_code=500,
             detail=format_error_response(500, str(e), "internal_error")
