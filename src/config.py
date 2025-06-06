@@ -3,6 +3,7 @@
 import os
 from dataclasses import dataclass, field
 from typing import List, Dict, Optional
+from datetime import datetime
 import yaml
 
 
@@ -106,3 +107,46 @@ class ConfigManager:
         """Validate that all model ports are unique."""
         ports = [config.port for config in self.model_configs.values()]
         return len(ports) == len(set(ports))
+
+
+@dataclass
+class APIKeyConfig:
+    """Configuration for a single API key."""
+    key: str
+    name: str
+    permissions: List[str] = field(default_factory=lambda: ["*"])
+    expires: Optional[str] = None
+    
+    def is_expired(self) -> bool:
+        """Check if the key has expired."""
+        if not self.expires:
+            return False
+        try:
+            expiry_date = datetime.fromisoformat(self.expires)
+            return datetime.now() > expiry_date
+        except ValueError:
+            return False
+    
+    def has_permission(self, endpoint: str) -> bool:
+        """Check if key has permission for endpoint."""
+        if "*" in self.permissions:
+            return True
+        return any(endpoint.startswith(perm) for perm in self.permissions)
+
+
+@dataclass
+class AuthConfig:
+    """Configuration for authentication."""
+    enabled: bool = False
+    keys: List[APIKeyConfig] = field(default_factory=list)
+    public_endpoints: List[str] = field(default_factory=lambda: ["/health", "/metrics"])
+    dashboard_auth_required: bool = True
+    rate_limits: Dict[str, int] = field(default_factory=lambda: {"default": 100})
+    
+    def get_api_key(self, key: str) -> Optional[APIKeyConfig]:
+        """Get API key configuration by key value."""
+        return next((api_key for api_key in self.keys if api_key.key == key), None)
+    
+    def is_public_endpoint(self, endpoint: str) -> bool:
+        """Check if endpoint is public (no auth required)."""
+        return any(endpoint.startswith(pub) for pub in self.public_endpoints)
