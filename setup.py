@@ -54,7 +54,7 @@ setup(
     },
     entry_points={
         "console_scripts": [
-            "llm-proxifier=cli:main",
+            "llm-proxifier=src.cli:main",
         ],
     },
     classifiers=[
