@@ -54,9 +54,11 @@ class ProxyConfig:
 class ConfigManager:
     """Manages loading and validation of configurations."""
     
-    def __init__(self, config_path: Optional[str] = None):
+    def __init__(self, config_path: Optional[str] = None, auth_config_path: Optional[str] = None):
         self.config_path = config_path or os.getenv("CONFIG_PATH", "./config/models.yaml")
+        self.auth_config_path = auth_config_path or os.getenv("AUTH_CONFIG_PATH", "./config/auth.yaml")
         self.proxy_config = self._load_proxy_config()
+        self.auth_config = self._load_auth_config()
         self.model_configs: Dict[str, ModelConfig] = {}
     
     def _load_proxy_config(self) -> ProxyConfig:
@@ -102,6 +104,38 @@ class ConfigManager:
     def list_model_names(self) -> List[str]:
         """Get list of configured model names."""
         return list(self.model_configs.keys())
+    
+    def _load_auth_config(self) -> 'AuthConfig':
+        """Load authentication configuration from YAML file."""
+        try:
+            with open(self.auth_config_path, 'r') as f:
+                data = yaml.safe_load(f)
+            
+            if 'authentication' not in data:
+                return AuthConfig()  # Return default config if no auth section
+            
+            auth_data = data['authentication']
+            
+            # Parse API keys
+            keys = []
+            for key_data in auth_data.get('api_keys', []):
+                keys.append(APIKeyConfig(**key_data))
+            
+            return AuthConfig(
+                enabled=auth_data.get('enabled', False),
+                keys=keys,
+                public_endpoints=auth_data.get('public_endpoints', ["/health", "/metrics"]),
+                dashboard_auth_required=auth_data.get('dashboard_auth_required', True),
+                rate_limits=auth_data.get('rate_limits', {"default": 100})
+            )
+            
+        except FileNotFoundError:
+            # Return default config if auth file doesn't exist
+            return AuthConfig()
+        except yaml.YAMLError as e:
+            raise ValueError(f"Invalid YAML in auth configuration file: {e}")
+        except Exception as e:
+            raise ValueError(f"Error loading auth configuration: {e}")
     
     def validate_model_ports(self) -> bool:
         """Validate that all model ports are unique."""

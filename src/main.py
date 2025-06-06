@@ -14,6 +14,8 @@ from src.config import ConfigManager
 from src.model_manager import ModelManager
 from src.proxy_handler import ProxyHandler
 from src.dashboard import dashboard_router
+from src.auth import AuthManager
+from src.middleware import AuthenticationMiddleware, RateLimitMiddleware
 from src.utils import format_error_response, get_system_memory_usage
 
 
@@ -21,12 +23,13 @@ from src.utils import format_error_response, get_system_memory_usage
 model_manager: ModelManager = None
 proxy_handler: ProxyHandler = None
 config_manager: ConfigManager = None
+auth_manager: AuthManager = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Manage application lifecycle."""
-    global model_manager, proxy_handler, config_manager
+    global model_manager, proxy_handler, config_manager, auth_manager
     
     # Startup
     logging.basicConfig(level=logging.INFO)
@@ -50,6 +53,13 @@ async def lifespan(app: FastAPI):
         
         # Initialize proxy handler
         proxy_handler = ProxyHandler()
+        
+        # Initialize authentication manager
+        auth_manager = AuthManager(config_manager)
+        
+        # Add authentication middleware
+        app.add_middleware(AuthenticationMiddleware, auth_manager=auth_manager)
+        app.add_middleware(RateLimitMiddleware, auth_manager=auth_manager)
         
         # Start cleanup task
         await model_manager.start_cleanup_task()
@@ -93,6 +103,8 @@ app.add_middleware(
 
 # Mount static files for dashboard
 app.mount("/static", StaticFiles(directory="static"), name="static")
+
+# Note: Authentication middleware will be added after startup in lifespan
 
 # Include dashboard router
 app.include_router(dashboard_router)
