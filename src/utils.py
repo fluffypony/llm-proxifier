@@ -3,6 +3,7 @@
 import socket
 import time
 import asyncio
+import subprocess
 import psutil
 import json
 from typing import List, Optional, AsyncGenerator, Dict, Any
@@ -101,7 +102,7 @@ def get_process_cpu_usage(pid: int) -> Optional[float]:
         return None
 
 
-async def graceful_shutdown(process: asyncio.subprocess.Process, timeout: int = 5) -> bool:
+async def graceful_shutdown(process: subprocess.Popen, timeout: int = 5) -> bool:
     """Gracefully shutdown a subprocess with timeout."""
     try:
         # Send SIGTERM

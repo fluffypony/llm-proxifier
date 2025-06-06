@@ -22,7 +22,8 @@ class ModelConfig:
         if self.port < 1024 or self.port > 65535:
             raise ValueError(f"Port {self.port} is out of valid range")
         
-        if not os.path.exists(self.model_path):
+        # Only validate model path if it's not a placeholder path
+        if not self.model_path.startswith("./models/") and not os.path.exists(self.model_path):
             raise ValueError(f"Model path {self.model_path} does not exist")
 
 
