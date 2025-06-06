@@ -1,0 +1,299 @@
+"""Model lifecycle management for the LLM proxy server."""
+
+import asyncio
+import logging
+import time
+from datetime import datetime, timedelta
+from typing import Dict, Optional, List
+import subprocess
+from dataclasses import dataclass
+
+from src.config import ModelConfig
+from src.utils import (
+    format_llama_cpp_command,
+    wait_for_server,
+    is_port_listening,
+    get_process_memory_usage,
+    get_process_cpu_usage,
+    graceful_shutdown
+)
+
+
+@dataclass
+class ModelInstance:
+    """Represents a running model instance."""
+    config: ModelConfig
+    process: Optional[subprocess.Popen] = None
+    last_accessed: Optional[datetime] = None
+    is_ready: bool = False
+    start_time: Optional[datetime] = None
+    request_count: int = 0
+    
+    @property
+    def health_check_url(self) -> str:
+        """Get the health check URL for this model."""
+        return f"http://127.0.0.1:{self.config.port}"
+    
+    @property
+    def api_url(self) -> str:
+        """Get the API base URL for this model."""
+        return f"http://127.0.0.1:{self.config.port}"
+    
+    async def start(self) -> bool:
+        """Start the model server process."""
+        if self.process and self.process.poll() is None:
+            logging.warning(f"Model {self.config.name} is already running")
+            return True
+        
+        if is_port_listening(self.config.port):
+            logging.error(f"Port {self.config.port} is already in use")
+            return False
+        
+        try:
+            cmd = format_llama_cpp_command(self.config)
+            logging.info(f"Starting model {self.config.name} with command: {' '.join(cmd)}")
+            
+            # Start the process
+            self.process = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True
+            )
+            
+            self.start_time = datetime.now()
+            self.is_ready = False
+            
+            # Wait for the server to be ready
+            server_ready = await wait_for_server(self.health_check_url, timeout=60)
+            
+            if server_ready and self.process.poll() is None:
+                self.is_ready = True
+                self.update_access_time()
+                logging.info(f"Model {self.config.name} started successfully on port {self.config.port}")
+                return True
+            else:
+                logging.error(f"Model {self.config.name} failed to start or health check failed")
+                await self.stop()
+                return False
+                
+        except Exception as e:
+            logging.error(f"Error starting model {self.config.name}: {e}")
+            await self.stop()
+            return False
+    
+    async def stop(self) -> bool:
+        """Stop the model server process."""
+        if not self.process:
+            return True
+        
+        try:
+            logging.info(f"Stopping model {self.config.name}")
+            
+            # Try graceful shutdown first
+            success = await graceful_shutdown(self.process, timeout=5)
+            
+            if success:
+                logging.info(f"Model {self.config.name} stopped gracefully")
+            else:
+                logging.warning(f"Model {self.config.name} was force killed")
+            
+            self.process = None
+            self.is_ready = False
+            return True
+            
+        except Exception as e:
+            logging.error(f"Error stopping model {self.config.name}: {e}")
+            return False
+    
+    async def health_check(self) -> bool:
+        """Check if the model server is healthy."""
+        if not self.process or self.process.poll() is not None:
+            self.is_ready = False
+            return False
+        
+        try:
+            import httpx
+            async with httpx.AsyncClient() as client:
+                response = await client.get(f"{self.health_check_url}/health", timeout=5.0)
+                healthy = response.status_code == 200
+                self.is_ready = healthy
+                return healthy
+        except Exception:
+            self.is_ready = False
+            return False
+    
+    def update_access_time(self):
+        """Update the last accessed timestamp."""
+        self.last_accessed = datetime.now()
+        self.request_count += 1
+    
+    def get_memory_usage(self) -> Optional[float]:
+        """Get memory usage of the model process in MB."""
+        if not self.process:
+            return None
+        return get_process_memory_usage(self.process.pid)
+    
+    def get_cpu_usage(self) -> Optional[float]:
+        """Get CPU usage of the model process."""
+        if not self.process:
+            return None
+        return get_process_cpu_usage(self.process.pid)
+    
+    def get_uptime(self) -> Optional[timedelta]:
+        """Get uptime of the model instance."""
+        if not self.start_time:
+            return None
+        return datetime.now() - self.start_time
+
+
+class ModelManager:
+    """Manages multiple model instances with lifecycle control."""
+    
+    def __init__(self, timeout_minutes: int = 2, max_concurrent: int = 4):
+        self.models: Dict[str, ModelInstance] = {}
+        self.configs: Dict[str, ModelConfig] = {}
+        self.timeout_minutes = timeout_minutes
+        self.max_concurrent = max_concurrent
+        self.cleanup_task: Optional[asyncio.Task] = None
+        self.lock = asyncio.Lock()
+        self.logger = logging.getLogger(__name__)
+    
+    def load_configs(self, configs: Dict[str, ModelConfig]):
+        """Load model configurations."""
+        self.configs = configs
+        self.logger.info(f"Loaded configurations for {len(configs)} models")
+    
+    async def get_or_start_model(self, model_name: str) -> Optional[ModelInstance]:
+        """Get a running model instance, starting it if necessary."""
+        async with self.lock:
+            # Check if model is configured
+            if model_name not in self.configs:
+                self.logger.error(f"Model {model_name} is not configured")
+                return None
+            
+            # Check if model is already running
+            if model_name in self.models:
+                instance = self.models[model_name]
+                if instance.is_ready and await instance.health_check():
+                    instance.update_access_time()
+                    return instance
+                else:
+                    # Remove unhealthy instance
+                    await instance.stop()
+                    del self.models[model_name]
+            
+            # Check concurrent limit
+            active_count = len([m for m in self.models.values() if m.is_ready])
+            if active_count >= self.max_concurrent:
+                self.logger.error(f"Maximum concurrent models ({self.max_concurrent}) reached")
+                return None
+            
+            # Start new instance
+            config = self.configs[model_name]
+            instance = ModelInstance(config=config)
+            
+            if await instance.start():
+                self.models[model_name] = instance
+                return instance
+            else:
+                return None
+    
+    async def stop_model(self, model_name: str) -> bool:
+        """Stop a specific model."""
+        async with self.lock:
+            if model_name not in self.models:
+                return True
+            
+            instance = self.models[model_name]
+            success = await instance.stop()
+            del self.models[model_name]
+            return success
+    
+    async def cleanup_inactive_models(self):
+        """Background task to cleanup inactive models."""
+        while True:
+            try:
+                await asyncio.sleep(30)  # Check every 30 seconds
+                
+                async with self.lock:
+                    current_time = datetime.now()
+                    timeout_delta = timedelta(minutes=self.timeout_minutes)
+                    
+                    models_to_stop = []
+                    for name, instance in self.models.items():
+                        if (instance.last_accessed and 
+                            current_time - instance.last_accessed > timeout_delta):
+                            models_to_stop.append(name)
+                    
+                    for name in models_to_stop:
+                        self.logger.info(f"Stopping inactive model: {name}")
+                        await self.models[name].stop()
+                        del self.models[name]
+                        
+            except Exception as e:
+                self.logger.error(f"Error in cleanup task: {e}")
+    
+    def get_active_models(self) -> List[str]:
+        """Get list of currently active model names."""
+        return [name for name, instance in self.models.items() if instance.is_ready]
+    
+    def get_model_status(self, model_name: str) -> Dict:
+        """Get detailed status of a model."""
+        if model_name not in self.models:
+            return {"status": "stopped"}
+        
+        instance = self.models[model_name]
+        return {
+            "status": "running" if instance.is_ready else "starting",
+            "port": instance.config.port,
+            "last_accessed": instance.last_accessed.isoformat() if instance.last_accessed else None,
+            "uptime": str(instance.get_uptime()) if instance.get_uptime() else None,
+            "memory_usage_mb": instance.get_memory_usage(),
+            "cpu_usage_percent": instance.get_cpu_usage(),
+            "request_count": instance.request_count
+        }
+    
+    def get_all_model_status(self) -> Dict[str, Dict]:
+        """Get status of all configured models."""
+        status = {}
+        for name in self.configs.keys():
+            status[name] = self.get_model_status(name)
+        return status
+    
+    async def start_cleanup_task(self):
+        """Start the background cleanup task."""
+        if self.cleanup_task:
+            return
+        
+        self.cleanup_task = asyncio.create_task(self.cleanup_inactive_models())
+        self.logger.info("Started model cleanup task")
+    
+    async def stop_cleanup_task(self):
+        """Stop the background cleanup task."""
+        if self.cleanup_task:
+            self.cleanup_task.cancel()
+            try:
+                await self.cleanup_task
+            except asyncio.CancelledError:
+                pass
+            self.cleanup_task = None
+            self.logger.info("Stopped model cleanup task")
+    
+    async def shutdown_all(self):
+        """Gracefully shutdown all models and cleanup tasks."""
+        self.logger.info("Shutting down all models")
+        
+        await self.stop_cleanup_task()
+        
+        async with self.lock:
+            tasks = []
+            for instance in self.models.values():
+                tasks.append(instance.stop())
+            
+            if tasks:
+                await asyncio.gather(*tasks, return_exceptions=True)
+            
+            self.models.clear()
+        
+        self.logger.info("All models shut down")
