@@ -222,6 +222,10 @@ class ModelManager:
                     
                     models_to_stop = []
                     for name, instance in self.models.items():
+                        # Skip preloaded models
+                        if instance.config.preload:
+                            continue
+                            
                         if (instance.last_accessed and 
                             current_time - instance.last_accessed > timeout_delta):
                             models_to_stop.append(name)
@@ -241,12 +245,23 @@ class ModelManager:
     def get_model_status(self, model_name: str) -> Dict:
         """Get detailed status of a model."""
         if model_name not in self.models:
-            return {"status": "stopped"}
+            config = self.configs.get(model_name, {})
+            return {
+                "status": "stopped",
+                "priority": getattr(config, 'priority', 5),
+                "resource_group": getattr(config, 'resource_group', 'default'),
+                "preload": getattr(config, 'preload', False),
+                "auto_start": getattr(config, 'auto_start', False)
+            }
         
         instance = self.models[model_name]
         return {
             "status": "running" if instance.is_ready else "starting",
             "port": instance.config.port,
+            "priority": instance.config.priority,
+            "resource_group": instance.config.resource_group,
+            "preload": instance.config.preload,
+            "auto_start": instance.config.auto_start,
             "last_accessed": instance.last_accessed.isoformat() if instance.last_accessed else None,
             "uptime": str(instance.get_uptime()) if instance.get_uptime() else None,
             "memory_usage_mb": instance.get_memory_usage(),
@@ -280,6 +295,196 @@ class ModelManager:
             self.cleanup_task = None
             self.logger.info("Stopped model cleanup task")
     
+    async def start_all_auto_models(self):
+        """Start all models with auto_start=True, sorted by priority."""
+        auto_start_configs = [
+            config for config in self.configs.values() 
+            if getattr(config, 'auto_start', False)
+        ]
+        
+        # Sort by priority (higher priority first)
+        auto_start_configs.sort(key=lambda x: getattr(x, 'priority', 5), reverse=True)
+        
+        self.logger.info(f"Starting {len(auto_start_configs)} auto-start models")
+        
+        for config in auto_start_configs:
+            try:
+                self.logger.info(f"Auto-starting model {config.name} (priority {config.priority})")
+                instance = await self.get_or_start_model(config.name)
+                if instance:
+                    self.logger.info(f"Auto-started model {config.name} successfully")
+                else:
+                    self.logger.error(f"Failed to auto-start model {config.name}")
+            except Exception as e:
+                self.logger.error(f"Error auto-starting model {config.name}: {e}")
+    
+    async def preload_models(self):
+        """Ensure all models with preload=True are running."""
+        preload_configs = [
+            config for config in self.configs.values()
+            if getattr(config, 'preload', False)
+        ]
+        
+        self.logger.info(f"Preloading {len(preload_configs)} models")
+        
+        for config in preload_configs:
+            try:
+                if config.name not in self.models or not self.models[config.name].is_ready:
+                    self.logger.info(f"Preloading model {config.name}")
+                    instance = await self.get_or_start_model(config.name)
+                    if instance:
+                        self.logger.info(f"Preloaded model {config.name} successfully")
+                    else:
+                        self.logger.error(f"Failed to preload model {config.name}")
+            except Exception as e:
+                self.logger.error(f"Error preloading model {config.name}: {e}")
+    
+    def get_models_by_priority(self) -> List[ModelConfig]:
+        """Return models sorted by priority (higher priority first)."""
+        configs = list(self.configs.values())
+        configs.sort(key=lambda x: getattr(x, 'priority', 5), reverse=True)
+        return configs
+    
+    def get_models_by_resource_group(self, resource_group: str = None) -> List[ModelConfig]:
+        """Get models by resource group."""
+        if resource_group is None:
+            # Return all models grouped by resource group
+            groups = {}
+            for config in self.configs.values():
+                group = getattr(config, 'resource_group', 'default')
+                if group not in groups:
+                    groups[group] = []
+                groups[group].append(config)
+            return groups
+        else:
+            # Return models in specific group
+            return [
+                config for config in self.configs.values()
+                if getattr(config, 'resource_group', 'default') == resource_group
+            ]
+    
+    async def stop_resource_group(self, resource_group: str) -> Dict[str, bool]:
+        """Stop all models in a resource group."""
+        models_in_group = self.get_models_by_resource_group(resource_group)
+        results = {}
+        
+        for config in models_in_group:
+            # Skip preloaded models with warning
+            if getattr(config, 'preload', False):
+                self.logger.warning(f"Skipping preloaded model {config.name} in group {resource_group}")
+                results[config.name] = False
+                continue
+                
+            try:
+                success = await self.stop_model(config.name)
+                results[config.name] = success
+                self.logger.info(f"Stopped model {config.name} in group {resource_group}")
+            except Exception as e:
+                self.logger.error(f"Error stopping model {config.name}: {e}")
+                results[config.name] = False
+        
+        return results
+    
+    async def start_resource_group(self, resource_group: str) -> Dict[str, bool]:
+        """Start all models in a resource group, respecting priority."""
+        models_in_group = self.get_models_by_resource_group(resource_group)
+        # Sort by priority
+        models_in_group.sort(key=lambda x: getattr(x, 'priority', 5), reverse=True)
+        
+        results = {}
+        for config in models_in_group:
+            try:
+                instance = await self.get_or_start_model(config.name)
+                results[config.name] = instance is not None
+                if instance:
+                    self.logger.info(f"Started model {config.name} in group {resource_group}")
+                else:
+                    self.logger.error(f"Failed to start model {config.name} in group {resource_group}")
+            except Exception as e:
+                self.logger.error(f"Error starting model {config.name}: {e}")
+                results[config.name] = False
+        
+        return results
+    
+    async def stop_all_models(self) -> Dict[str, bool]:
+        """Stop all running models except preloaded ones."""
+        results = {}
+        models_to_stop = list(self.models.keys())
+        
+        for model_name in models_to_stop:
+            instance = self.models[model_name]
+            # Skip preloaded models
+            if getattr(instance.config, 'preload', False):
+                self.logger.warning(f"Skipping preloaded model {model_name}")
+                results[model_name] = False
+                continue
+                
+            try:
+                success = await self.stop_model(model_name)
+                results[model_name] = success
+            except Exception as e:
+                self.logger.error(f"Error stopping model {model_name}: {e}")
+                results[model_name] = False
+        
+        return results
+    
+    async def start_all_models(self) -> Dict[str, bool]:
+        """Start all configured models."""
+        results = {}
+        models_by_priority = self.get_models_by_priority()
+        
+        for config in models_by_priority:
+            try:
+                instance = await self.get_or_start_model(config.name)
+                results[config.name] = instance is not None
+            except Exception as e:
+                self.logger.error(f"Error starting model {config.name}: {e}")
+                results[config.name] = False
+        
+        return results
+    
+    async def restart_all_models(self) -> Dict[str, bool]:
+        """Restart all currently running models."""
+        results = {}
+        running_models = list(self.models.keys())
+        
+        for model_name in running_models:
+            try:
+                # Stop first
+                await self.stop_model(model_name)
+                # Start again
+                instance = await self.get_or_start_model(model_name)
+                results[model_name] = instance is not None
+            except Exception as e:
+                self.logger.error(f"Error restarting model {model_name}: {e}")
+                results[model_name] = False
+        
+        return results
+    
+    def get_resource_group_status(self, resource_group: str = None) -> Dict:
+        """Get status summary for resource groups."""
+        if resource_group:
+            models = self.get_models_by_resource_group(resource_group)
+            running = sum(1 for m in models if m.name in self.models and self.models[m.name].is_ready)
+            return {
+                "resource_group": resource_group,
+                "total_models": len(models),
+                "running_models": running,
+                "models": [m.name for m in models]
+            }
+        else:
+            # Return all groups
+            all_groups = self.get_models_by_resource_group()
+            status = {}
+            for group_name, models in all_groups.items():
+                running = sum(1 for m in models if m.name in self.models and self.models[m.name].is_ready)
+                status[group_name] = {
+                    "total_models": len(models),
+                    "running_models": running,
+                    "models": [m.name for m in models]
+                }
+            return status
+
     async def shutdown_all(self):
         """Gracefully shutdown all models and cleanup tasks."""
         self.logger.info("Shutting down all models")
