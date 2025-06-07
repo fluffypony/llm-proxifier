@@ -290,7 +290,7 @@ Examples:
                        default=os.getenv("CONFIG_PATH", "./config/models.yaml"))
     parser.add_argument("--auth-config", help="Path to auth config file",
                        default=os.getenv("AUTH_CONFIG_PATH", "./config/auth.yaml"))
-    parser.add_argument("--host", "-h", help="Host to bind to")
+    parser.add_argument("--host", help="Host to bind to")
     parser.add_argument("--port", "-p", type=int, help="Port to bind to")
     parser.add_argument("--log-level", "-l", choices=["DEBUG", "INFO", "WARNING", "ERROR"],
                        default="INFO", help="Log level")
