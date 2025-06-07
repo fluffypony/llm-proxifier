@@ -40,7 +40,7 @@ class ConnectionManager:
         for connection in self.active_connections:
             try:
                 await connection.send_json(data)
-            except:
+            except Exception:
                 disconnected.append(connection)
 
         # Remove disconnected clients
@@ -713,21 +713,6 @@ async def health_check():
 
 
 # Queue Management Endpoints
-@dashboard_router.get("/api/queue/status")
-async def get_queue_status():
-    """Get comprehensive queue status for all models."""
-    try:
-        from llm_proxifier.main import queue_manager
-        if not queue_manager:
-            raise HTTPException(status_code=503, detail="Queue manager not available")
-
-        # Get queue statistics from enhanced queue manager
-        queue_stats = queue_manager.get_queue_stats()
-
-        return queue_stats
-    except Exception as e:
-        logger.error(f"Error getting queue status: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
 
 
 @dashboard_router.get("/api/queue/history")

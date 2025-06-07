@@ -6,14 +6,14 @@ build-backend = "setuptools.build_meta"
 name = "llm-proxifier"
 description = "A lightweight, intelligent proxy server that manages multiple LLaMA models on-demand"
 readme = "README.md"
-license = {text = "BSD-3-Clause"}
+license = "BSD-3-Clause"
+license-files = ["LICENSE"]
 authors = [
-    {name = "LLM Proxifier Contributors", email = "llm-proxifier@example.com"}
+    {name = "LLM Proxifier Contributors", email = "llm-proxifier@ts.org"}
 ]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: BSD License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.8",

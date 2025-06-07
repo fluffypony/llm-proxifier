@@ -64,7 +64,7 @@ def _get_git_version() -> Optional[str]:
                 # Format: tag-commits-ghash
                 parts = version.split('-')
                 if len(parts) >= 3:
-                    tag, commits, ghash = parts[0], parts[1], parts[2]
+                    tag, commits = parts[0], parts[1]
                     return f"{tag}.dev{commits}"
 
             return version
