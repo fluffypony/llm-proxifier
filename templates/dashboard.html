@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>LLM Proxifier Dashboard</title>
     <link rel="stylesheet" href="/static/css/dashboard.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
     <div class="container">
@@ -24,52 +25,168 @@
             </div>
         </header>
 
-        <div class="system-overview">
-            <h2>System Overview</h2>
-            <div class="overview-cards">
-                <div class="card">
-                    <h3>Active Models</h3>
-                    <div class="stat" id="active-models">0 / 0</div>
-                </div>
-                <div class="card">
-                    <h3>System Memory</h3>
-                    <div class="stat" id="system-memory">0 GB</div>
-                    <div class="progress-bar">
-                        <div class="progress-fill" id="memory-progress"></div>
+        <!-- Tab Navigation -->
+        <nav class="dashboard-tabs">
+            <button class="tab-button active" data-tab="overview">📊 Overview</button>
+            <button class="tab-button" data-tab="priority">🎯 Priority Management</button>
+            <button class="tab-button" data-tab="groups">👥 Resource Groups</button>
+            <button class="tab-button" data-tab="queues">📈 Queue Monitor</button>
+            <button class="tab-button" data-tab="config">⚙️ Configuration</button>
+        </nav>
+
+        <!-- Overview Tab (Default) -->
+        <div class="tab-content" id="overview-tab" style="display: block;">
+            <div class="system-overview">
+                <h2>System Overview</h2>
+                <div class="overview-cards">
+                    <div class="card">
+                        <h3>Active Models</h3>
+                        <div class="stat" id="active-models">0 / 0</div>
+                    </div>
+                    <div class="card">
+                        <h3>System Memory</h3>
+                        <div class="stat" id="system-memory">0 GB</div>
+                        <div class="progress-bar">
+                            <div class="progress-fill" id="memory-progress"></div>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <h3>Model Memory</h3>
+                        <div class="stat" id="model-memory">0 MB</div>
+                    </div>
+                    <div class="card">
+                        <h3>Connection</h3>
+                        <div class="stat" id="connection-status">
+                            <span id="ws-status" class="status-indicator offline"></span>
+                            <span id="ws-status-text">Connecting...</span>
+                        </div>
+                        <div class="last-update">Last update: <span id="last-update">Never</span></div>
                     </div>
                 </div>
-                <div class="card">
-                    <h3>Model Memory</h3>
-                    <div class="stat" id="model-memory">0 MB</div>
-                </div>
-                <div class="card">
-                    <h3>Status</h3>
-                    <div class="stat" id="system-status">
-                        <span class="status-indicator online"></span> Online
+            </div>
+
+            <div class="models-section">
+                <div class="section-header">
+                    <h2>Model Status</h2>
+                    <div class="section-controls">
+                        <button id="start-all-btn" class="btn btn-primary">Start All</button>
+                        <button id="stop-all-btn" class="btn btn-danger">Stop All</button>
                     </div>
+                </div>
+                <div class="models-grid" id="models-grid">
+                    <!-- Model cards will be dynamically inserted here -->
                 </div>
             </div>
         </div>
 
-        <div class="models-section">
-            <div class="section-header">
-                <h2>Model Status</h2>
-                <div class="section-controls">
-                    <button id="start-all-btn" class="btn btn-primary">Start All</button>
-                    <button id="stop-all-btn" class="btn btn-danger">Stop All</button>
+        <!-- Priority Management Tab -->
+        <div class="tab-content" id="priority-tab" style="display: none;">
+            <div class="priority-management">
+                <div class="priority-header">
+                    <h2>Model Priority Management</h2>
+                    <div class="priority-controls">
+                        <button class="btn btn-primary" id="save-priorities">Save Changes</button>
+                        <button class="btn btn-secondary" id="cancel-priorities">Cancel</button>
+                    </div>
                 </div>
-            </div>
-            <div class="models-grid" id="models-grid">
-                <!-- Model cards will be dynamically inserted here -->
+                <div class="priority-help">
+                    <p>💡 Drag and drop models to reorder priorities. Higher priority models are started first.</p>
+                    <p>Use Ctrl+S to save changes, Ctrl+Z to cancel.</p>
+                </div>
+                <div class="priority-list" id="priority-list">
+                    <!-- Priority items will be dynamically inserted here -->
+                </div>
             </div>
         </div>
 
-        <div class="logs-section">
-            <h2>Connection Status</h2>
-            <div class="connection-status">
-                <span id="ws-status" class="status-indicator offline"></span>
-                <span id="ws-status-text">Connecting...</span>
-                <span class="last-update">Last update: <span id="last-update">Never</span></span>
+        <!-- Resource Groups Tab -->
+        <div class="tab-content" id="groups-tab" style="display: none;">
+            <div class="resource-groups">
+                <div class="groups-header">
+                    <h2>Resource Groups</h2>
+                    <div class="groups-controls">
+                        <button class="btn btn-primary" id="create-group">➕ Create Group</button>
+                        <button class="btn btn-secondary" onclick="resourceGroupManager.loadGroups().then(() => resourceGroupManager.renderGroups())">🔄 Refresh</button>
+                    </div>
+                </div>
+                <div class="groups-help">
+                    <p>💡 Group models by environment or purpose. Start/stop entire groups at once.</p>
+                    <p>Use Ctrl+R to refresh group status.</p>
+                </div>
+                <div class="groups-grid" id="groups-grid">
+                    <!-- Resource group cards will be dynamically inserted here -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Queue Monitor Tab -->
+        <div class="tab-content" id="queues-tab" style="display: none;">
+            <div class="queue-monitor">
+                <div class="queue-header">
+                    <h2>Queue Status Monitor</h2>
+                    <div class="queue-controls">
+                        <button class="btn btn-secondary" id="pause-monitoring">⏸️ Pause</button>
+                        <select id="refresh-interval">
+                            <option value="1000">1s refresh</option>
+                            <option value="5000" selected>5s refresh</option>
+                            <option value="10000">10s refresh</option>
+                            <option value="30000">30s refresh</option>
+                        </select>
+                        <button class="btn btn-info" onclick="queueMonitor.exportQueueStats()">📊 Export Stats</button>
+                    </div>
+                </div>
+                <div class="queue-help">
+                    <p>💡 Monitor request queues in real-time. Red alerts indicate high queue depth or wait times.</p>
+                    <p>Use Ctrl+R to refresh, Space to pause/resume monitoring.</p>
+                </div>
+                <div class="queue-dashboard" id="queue-dashboard">
+                    <!-- Queue status dashboard will be dynamically inserted here -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Configuration Tab -->
+        <div class="tab-content" id="config-tab" style="display: none;">
+            <div class="config-editor">
+                <div class="config-header">
+                    <h2>Configuration Editor</h2>
+                    <div class="config-controls">
+                        <select id="config-type">
+                            <option value="models">Models Configuration</option>
+                            <option value="auth">Auth Configuration</option>
+                        </select>
+                        <button class="btn btn-secondary" id="create-backup">💾 Create Backup</button>
+                        <button class="btn btn-warning" id="reload-config">🔄 Reload</button>
+                        <button class="btn btn-primary" id="save-config">💾 Save</button>
+                    </div>
+                </div>
+                <div class="config-help">
+                    <p>💡 Edit configuration files with real-time validation. Create backups before making changes.</p>
+                    <p>Use Ctrl+S to save, Ctrl+R to reload, Ctrl+D to view diff.</p>
+                </div>
+                <div class="config-editor-container">
+                    <div class="editor-panel">
+                        <div class="editor-toolbar">
+                            <button class="btn btn-xs" onclick="configEditor.formatJson()" title="Format JSON">🎨 Format</button>
+                            <button class="btn btn-xs" onclick="configEditor.validateNow()" title="Validate">✅ Validate</button>
+                            <button class="btn btn-xs" onclick="configEditor.showDiff()" title="Show changes">👁️ Diff</button>
+                            <span class="editor-status">Ready</span>
+                        </div>
+                        <textarea id="config-textarea" class="config-textarea" 
+                                  placeholder="Loading configuration..."></textarea>
+                    </div>
+                    
+                    <div class="preview-panel">
+                        <div class="validation-results" id="validation-results">
+                            <h4>Validation Results</h4>
+                            <div class="validation-loading">Loading...</div>
+                        </div>
+                        <div class="backup-manager" id="backup-manager">
+                            <h4>Backup Management</h4>
+                            <div class="backup-loading">Loading backups...</div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -86,6 +203,11 @@
         </div>
     </div>
 
+    <!-- Load all JavaScript components -->
+    <script src="/static/js/priority-manager.js"></script>
+    <script src="/static/js/resource-groups.js"></script>
+    <script src="/static/js/queue-monitor.js"></script>
+    <script src="/static/js/config-editor.js"></script>
     <script src="/static/js/dashboard.js"></script>
 </body>
 </html>
