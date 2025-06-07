@@ -39,7 +39,33 @@ A lightweight, intelligent proxy server that manages multiple LLaMA models on-de
 
 ## 🛠️ Quick Start
 
-### Linux/macOS
+### Install from PyPI (Recommended)
+
+```bash
+# Install the package
+pip install llm-proxifier
+
+# Create a config directory
+mkdir -p config
+
+# Create your models configuration
+cat > config/models.yaml << 'EOF'
+models:
+  llama-7b:
+    port: 11001
+    model_path: "./models/your-model.gguf"
+    context_length: 4096
+    gpu_layers: -1
+    chat_format: llama-2
+EOF
+
+# Start the proxy server
+llm-proxifier start
+```
+
+### Install from Source
+
+#### Linux/macOS
 
 ```bash
 # Clone the repository
@@ -60,7 +86,7 @@ pip install -r requirements.txt
 ./scripts/start_proxy.sh
 ```
 
-### Windows
+#### Windows
 
 ```powershell
 # Clone the repository
@@ -108,14 +134,16 @@ docker run -d \
   llm-proxifier
 ```
 
-### pipx Installation (Recommended for system-wide use)
+### Alternative Installation Methods
+
+#### pipx Installation (System-wide)
 
 ```bash
 # Install globally with pipx
 pipx install llm-proxifier
 
 # Run with custom config
-llm-proxifier --config-dir /path/to/your/config --port 8000
+llm-proxifier start --config /path/to/your/config/models.yaml --port 8000
 ```
 
 ## ⚙️ Configuration
