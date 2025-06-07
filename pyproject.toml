@@ -6,14 +6,14 @@ build-backend = "setuptools.build_meta"
 name = "llm-proxifier"
 description = "A lightweight, intelligent proxy server that manages multiple LLaMA models on-demand"
 readme = "README.md"
-license = {text = "MIT"}
+license = {text = "BSD-3-Clause"}
 authors = [
-    {name = "LLM Proxifier Contributors"}
+    {name = "LLM Proxifier Contributors", email = "llm-proxifier@example.com"}
 ]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: MIT License",
+    "License :: OSI Approved :: BSD License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.8",
@@ -59,16 +59,16 @@ Issues = "https://github.com/fluffypony/llm-proxifier/issues"
 Documentation = "https://github.com/fluffypony/llm-proxifier/blob/main/README.md"
 
 [project.scripts]
-llm-proxifier = "src.cli:main"
+llm-proxifier = "llm_proxifier.cli:main"
 
 [tool.setuptools]
-packages = ["src"]
+packages = {"llm_proxifier" = "src"}
 
 [tool.setuptools.dynamic]
-version = {attr = "src._version.__version__"}
+version = {attr = "llm_proxifier._version.__version__"}
 
 [tool.setuptools.package-data]
-src = ["py.typed"]
+llm_proxifier = ["py.typed"]
 
 [tool.black]
 line-length = 100
