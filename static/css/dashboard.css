@@ -1604,3 +1604,206 @@ body {
     top: 1rem;
   }
 }
+
+/* Error and warning states */
+.error-banner {
+  background: #fee;
+  border: 1px solid #fcc;
+  border-radius: 4px;
+  padding: 12px;
+  margin-bottom: 16px;
+  color: #c33;
+}
+
+.error-content {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.error-icon {
+  font-size: 18px;
+}
+
+.error-message {
+  flex: 1;
+  font-weight: 500;
+}
+
+/* Health banner for connection monitoring */
+.health-banner {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 1000;
+  padding: 8px 16px;
+  text-align: center;
+  font-weight: 500;
+  animation: slideDown 0.3s ease-out;
+}
+
+.health-banner.warning {
+  background: #fff3cd;
+  border-bottom: 1px solid #ffeaa7;
+  color: #856404;
+}
+
+.health-banner.success {
+  background: #d4edda;
+  border-bottom: 1px solid #c3e6cb;
+  color: #155724;
+}
+
+.health-content {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.health-icon {
+  font-size: 16px;
+}
+
+.health-message {
+  flex: 1;
+  text-align: left;
+}
+
+/* Validation error display */
+.validation-section {
+  margin-bottom: 20px;
+  padding: 15px;
+  border-radius: 6px;
+}
+
+.validation-section.errors {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+}
+
+.validation-section.warnings {
+  background: #fffbeb;
+  border: 1px solid #fed7aa;
+}
+
+.validation-list {
+  list-style: none;
+  padding: 0;
+  margin: 10px 0 0 0;
+}
+
+.validation-error,
+.validation-warning {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(0,0,0,0.1);
+}
+
+.validation-error:last-child,
+.validation-warning:last-child {
+  border-bottom: none;
+}
+
+.error-text {
+  color: #dc2626;
+  font-family: monospace;
+  font-size: 13px;
+  flex: 1;
+  margin-right: 10px;
+}
+
+.warning-text {
+  color: #d97706;
+  font-family: monospace;
+  font-size: 13px;
+  flex: 1;
+  margin-right: 10px;
+}
+
+.validation-success {
+  background: #f0f9ff;
+  border: 1px solid #bae6fd;
+  color: #0369a1;
+  padding: 12px;
+  border-radius: 6px;
+  text-align: center;
+  font-weight: 500;
+}
+
+/* Dark theme adjustments for error states */
+[data-theme="dark"] .error-banner {
+  background: #451a1a;
+  border-color: #7f1d1d;
+  color: #fca5a5;
+}
+
+[data-theme="dark"] .health-banner.warning {
+  background: #451a03;
+  border-bottom-color: #92400e;
+  color: #fbbf24;
+}
+
+[data-theme="dark"] .health-banner.success {
+  background: #064e3b;
+  border-bottom-color: #059669;
+  color: #34d399;
+}
+
+[data-theme="dark"] .validation-section.errors {
+  background: #451a1a;
+  border-color: #7f1d1d;
+}
+
+[data-theme="dark"] .validation-section.warnings {
+  background: #451a03;
+  border-color: #92400e;
+}
+
+[data-theme="dark"] .validation-success {
+  background: #0c4a6e;
+  border-color: #0284c7;
+  color: #7dd3fc;
+}
+
+[data-theme="dark"] .error-text {
+  color: #f87171;
+}
+
+[data-theme="dark"] .warning-text {
+  color: #fbbf24;
+}
+
+/* Animation for health banner */
+@keyframes slideDown {
+  from {
+    transform: translateY(-100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+/* Button styles for error states */
+.btn.btn-xs {
+  padding: 2px 8px;
+  font-size: 11px;
+  border-radius: 3px;
+}
+
+.btn.btn-outline {
+  background: transparent;
+  border: 1px solid currentColor;
+}
+
+.btn.btn-outline:hover {
+  background: currentColor;
+  color: white;
+}
