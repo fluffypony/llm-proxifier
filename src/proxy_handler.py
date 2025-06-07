@@ -9,8 +9,8 @@ import httpx
 from fastapi import HTTPException, Request
 from fastapi.responses import StreamingResponse, JSONResponse
 
-from src.queue_manager import QueueManager, ModelState
-from src.utils import (
+from .queue_manager import QueueManager, ModelState
+from .utils import (
     extract_model_name,
     validate_openai_request,
     format_error_response,

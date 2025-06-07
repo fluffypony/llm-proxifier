@@ -7,7 +7,7 @@ from starlette.requests import Request
 from starlette.responses import Response, JSONResponse
 from fastapi import HTTPException
 
-from src.auth import AuthManager, extract_bearer_token, create_auth_error_response, create_permission_error_response
+from .auth import AuthManager, extract_bearer_token, create_auth_error_response, create_permission_error_response
 
 
 logger = logging.getLogger(__name__)

@@ -10,8 +10,8 @@ from typing import Optional
 
 import httpx
 
-from src._version import get_version, get_build_info
-from src.config import ConfigManager
+from ._version import get_version, get_build_info
+from .config import ConfigManager
 
 
 def setup_logging(level: str = "INFO"):
@@ -53,7 +53,7 @@ async def check_server_status(host: str, port: int) -> dict:
 def cmd_start(args):
     """Start the LLM Proxifier server."""
     import uvicorn
-    from src.main import app
+    from .main import app
     
     setup_logging(args.log_level)
     

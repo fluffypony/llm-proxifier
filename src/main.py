@@ -10,15 +10,15 @@ from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from src.config import ConfigManager
-from src.model_manager import ModelManager
-from src.proxy_handler import ProxyHandler
-from src.queue_manager import QueueManager
-from src.config_api import ConfigurationManager
-from src.dashboard import dashboard_router
-from src.auth import AuthManager
-from src.middleware import AuthenticationMiddleware, RateLimitMiddleware
-from src.utils import format_error_response, get_system_memory_usage
+from .config import ConfigManager
+from .model_manager import ModelManager
+from .proxy_handler import ProxyHandler
+from .queue_manager import QueueManager
+from .config_api import ConfigurationManager
+from .dashboard import dashboard_router
+from .auth import AuthManager
+from .middleware import AuthenticationMiddleware, RateLimitMiddleware
+from .utils import format_error_response, get_system_memory_usage
 
 
 # Global instances
@@ -69,8 +69,8 @@ async def lifespan(app: FastAPI):
         auth_manager = AuthManager(config_manager)
         
         # Connect notification manager to WebSocket manager
-        from src.config_notifications import config_notification_manager
-        from src.dashboard import manager as websocket_manager
+        from .config_notifications import config_notification_manager
+        from .dashboard import manager as websocket_manager
         config_notification_manager.set_websocket_manager(websocket_manager)
         
         # Add authentication middleware

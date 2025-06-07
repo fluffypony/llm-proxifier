@@ -8,9 +8,9 @@ from typing import Dict, Optional, List, Any
 import subprocess
 from dataclasses import dataclass
 
-from src.config import ModelConfig
-from src.queue_manager import QueueManager, ModelState
-from src.utils import (
+from .config import ModelConfig
+from .queue_manager import QueueManager, ModelState
+from .utils import (
     format_llama_cpp_command,
     wait_for_server,
     is_port_listening,
@@ -219,7 +219,7 @@ class ModelManager:
             
             # Notify about model starting
             try:
-                from src.config_notifications import config_notification_manager
+                from .config_notifications import config_notification_manager
                 await config_notification_manager.notify_model_reload(
                     model_name, "starting", {"port": config.port}
                 )
@@ -231,7 +231,7 @@ class ModelManager:
                 
                 # Notify about successful model start
                 try:
-                    from src.config_notifications import config_notification_manager
+                    from .config_notifications import config_notification_manager
                     await config_notification_manager.notify_model_reload(
                         model_name, "completed", {"api_url": instance.api_url, "port": config.port}
                     )
@@ -242,7 +242,7 @@ class ModelManager:
             else:
                 # Notify about failed model start
                 try:
-                    from src.config_notifications import config_notification_manager
+                    from .config_notifications import config_notification_manager
                     await config_notification_manager.notify_model_reload(
                         model_name, "failed", {"error": "Model failed to start"}
                     )
