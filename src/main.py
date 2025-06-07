@@ -14,6 +14,7 @@ from src.config import ConfigManager
 from src.model_manager import ModelManager
 from src.proxy_handler import ProxyHandler
 from src.queue_manager import QueueManager
+from src.config_api import ConfigurationManager
 from src.dashboard import dashboard_router
 from src.auth import AuthManager
 from src.middleware import AuthenticationMiddleware, RateLimitMiddleware
@@ -26,12 +27,13 @@ proxy_handler: ProxyHandler = None
 config_manager: ConfigManager = None
 auth_manager: AuthManager = None
 queue_manager: QueueManager = None
+configuration_manager: ConfigurationManager = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Manage application lifecycle."""
-    global model_manager, proxy_handler, config_manager, auth_manager, queue_manager
+    global model_manager, proxy_handler, config_manager, auth_manager, queue_manager, configuration_manager
     
     # Startup
     logging.basicConfig(level=logging.INFO)
@@ -48,6 +50,9 @@ async def lifespan(app: FastAPI):
         
         # Initialize queue manager
         queue_manager = QueueManager()
+        
+        # Initialize configuration manager
+        configuration_manager = ConfigurationManager()
         
         # Initialize model manager with queue manager
         model_manager = ModelManager(
@@ -556,6 +561,196 @@ async def clear_model_queue(model_name: str):
         return {"message": f"Queue cleared for model {model_name}"}
     except Exception as e:
         logging.error(f"Error clearing queue for {model_name}: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=format_error_response(500, str(e), "internal_error")
+        )
+
+
+# Configuration Management Endpoints
+@app.get("/admin/config/models/schema")
+async def get_models_config_schema():
+    """Return JSON schema for models configuration."""
+    try:
+        return configuration_manager.get_config_schema("models")
+    except Exception as e:
+        logging.error(f"Error getting models config schema: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=format_error_response(500, str(e), "internal_error")
+        )
+
+
+@app.get("/admin/config/auth/schema")
+async def get_auth_config_schema():
+    """Return JSON schema for auth configuration."""
+    try:
+        return configuration_manager.get_config_schema("auth")
+    except Exception as e:
+        logging.error(f"Error getting auth config schema: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=format_error_response(500, str(e), "internal_error")
+        )
+
+
+@app.get("/admin/config/models/backups")
+async def list_models_config_backups():
+    """List available models configuration backups."""
+    try:
+        backups = configuration_manager.list_backups("models")
+        return [
+            {
+                "backup_id": backup.backup_id,
+                "timestamp": backup.timestamp.isoformat(),
+                "description": backup.description
+            }
+            for backup in backups
+        ]
+    except Exception as e:
+        logging.error(f"Error listing models config backups: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=format_error_response(500, str(e), "internal_error")
+        )
+
+
+@app.get("/admin/config/auth/backups")
+async def list_auth_config_backups():
+    """List available auth configuration backups."""
+    try:
+        backups = configuration_manager.list_backups("auth")
+        return [
+            {
+                "backup_id": backup.backup_id,
+                "timestamp": backup.timestamp.isoformat(),
+                "description": backup.description
+            }
+            for backup in backups
+        ]
+    except Exception as e:
+        logging.error(f"Error listing auth config backups: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=format_error_response(500, str(e), "internal_error")
+        )
+
+
+@app.post("/admin/config/models/backup")
+async def backup_models_config(description: str = "Manual backup"):
+    """Create backup of models configuration."""
+    try:
+        result = configuration_manager.backup_config("models", description)
+        if result["success"]:
+            return result
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail=format_error_response(400, result["error"], "backup_failed")
+            )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"Error backing up models config: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=format_error_response(500, str(e), "internal_error")
+        )
+
+
+@app.post("/admin/config/auth/backup")
+async def backup_auth_config(description: str = "Manual backup"):
+    """Create backup of auth configuration."""
+    try:
+        result = configuration_manager.backup_config("auth", description)
+        if result["success"]:
+            return result
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail=format_error_response(400, result["error"], "backup_failed")
+            )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"Error backing up auth config: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=format_error_response(500, str(e), "internal_error")
+        )
+
+
+@app.post("/admin/config/models/restore/{backup_id}")
+async def restore_models_config(backup_id: str):
+    """Restore models configuration from backup."""
+    try:
+        result = configuration_manager.restore_config("models", backup_id)
+        if result["success"]:
+            # Reload configuration in the application
+            new_configs = config_manager.load_model_configs()
+            model_manager.reload_model_config(new_configs)
+            return result
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail=format_error_response(400, result["error"], "restore_failed")
+            )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"Error restoring models config from {backup_id}: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=format_error_response(500, str(e), "internal_error")
+        )
+
+
+@app.post("/admin/config/auth/restore/{backup_id}")
+async def restore_auth_config(backup_id: str):
+    """Restore auth configuration from backup."""
+    try:
+        result = configuration_manager.restore_config("auth", backup_id)
+        if result["success"]:
+            # Reload configuration in the application
+            # This would require reloading the entire config manager
+            return result
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail=format_error_response(400, result["error"], "restore_failed")
+            )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"Error restoring auth config from {backup_id}: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=format_error_response(500, str(e), "internal_error")
+        )
+
+
+@app.get("/admin/config/validation/models")
+async def validate_models_config():
+    """Validate current models configuration."""
+    try:
+        config_data = configuration_manager.load_models_config()
+        return configuration_manager.validate_config(config_data, "models")
+    except Exception as e:
+        logging.error(f"Error validating models config: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=format_error_response(500, str(e), "internal_error")
+        )
+
+
+@app.get("/admin/config/validation/auth")
+async def validate_auth_config():
+    """Validate current auth configuration."""
+    try:
+        config_data = configuration_manager.load_auth_config()
+        return configuration_manager.validate_config(config_data, "auth")
+    except Exception as e:
+        logging.error(f"Error validating auth config: {e}")
         raise HTTPException(
             status_code=500,
             detail=format_error_response(500, str(e), "internal_error")
