@@ -65,7 +65,7 @@ llm-proxifier = "llm_proxifier.cli:main"
 where = ["src"]
 
 [tool.setuptools.dynamic]
-version = {attr = "_version.__version__"}
+version = {attr = "llm_proxifier._version.__version__"}
 
 [tool.setuptools.package-data]
 "*" = ["py.typed"]

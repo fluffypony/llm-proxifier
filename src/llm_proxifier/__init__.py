@@ -1,5 +1,5 @@
 """LLM Proxifier - A lightweight, intelligent proxy server for LLaMA models."""
 
-from ._version import __version__
+from llm_proxifier._version import __version__
 
 __all__ = ["__version__"]

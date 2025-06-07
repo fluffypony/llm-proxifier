@@ -7,7 +7,7 @@ from typing import Optional, List, Dict, Any
 from datetime import datetime
 
 from passlib.context import CryptContext
-from .config import ConfigManager, APIKeyConfig
+from llm_proxifier.config import ConfigManager, APIKeyConfig
 
 
 class AuthManager:

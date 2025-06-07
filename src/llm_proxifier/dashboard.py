@@ -9,7 +9,7 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 
-from .utils import get_system_memory_usage, format_uptime
+from llm_proxifier.utils import get_system_memory_usage, format_uptime
 
 logger = logging.getLogger(__name__)
 
@@ -61,7 +61,7 @@ async def dashboard_home(request: Request):
 @dashboard_router.get("/api/status")
 async def get_dashboard_status():
     """Get current system and model status for dashboard."""
-    from .main import model_manager, config_manager
+    from llm_proxifier.main import model_manager, config_manager
     
     try:
         # Get model status
@@ -122,7 +122,7 @@ async def get_dashboard_status():
 @dashboard_router.get("/api/metrics")
 async def get_dashboard_metrics():
     """Get detailed metrics for dashboard charts."""
-    from .main import model_manager
+    from llm_proxifier.main import model_manager
     
     try:
         model_status = model_manager.get_all_model_status()
@@ -152,7 +152,7 @@ async def get_dashboard_metrics():
 @dashboard_router.post("/api/models/{model_name}/start")
 async def dashboard_start_model(model_name: str):
     """Start a model via dashboard."""
-    from .main import model_manager
+    from llm_proxifier.main import model_manager
     
     try:
         model_instance = await model_manager.get_or_start_model(model_name)
@@ -173,7 +173,7 @@ async def dashboard_start_model(model_name: str):
 @dashboard_router.post("/api/models/{model_name}/stop")
 async def dashboard_stop_model(model_name: str):
     """Stop a model via dashboard."""
-    from .main import model_manager
+    from llm_proxifier.main import model_manager
     
     try:
         success = await model_manager.stop_model(model_name)
@@ -232,7 +232,7 @@ class ConfigUpdateModel(BaseModel):
 async def get_models_by_priority():
     """Get models sorted by priority."""
     try:
-        from .main import model_manager
+        from llm_proxifier.main import model_manager
         if not model_manager:
             raise HTTPException(status_code=503, detail="Model manager not available")
         
@@ -257,7 +257,7 @@ async def get_models_by_priority():
 async def update_model_priorities(priority_update: PriorityUpdateModel):
     """Update model priorities."""
     try:
-        from .main import model_manager, config_manager
+        from llm_proxifier.main import model_manager, config_manager
         if not model_manager or not config_manager:
             raise HTTPException(status_code=503, detail="Managers not available")
         
@@ -288,7 +288,7 @@ async def update_model_priorities(priority_update: PriorityUpdateModel):
 async def get_resource_groups():
     """Get resource group information."""
     try:
-        from .main import model_manager
+        from llm_proxifier.main import model_manager
         if not model_manager:
             raise HTTPException(status_code=503, detail="Model manager not available")
         
@@ -302,7 +302,7 @@ async def get_resource_groups():
 async def start_resource_group(resource_group: str):
     """Start all models in a resource group."""
     try:
-        from .main import model_manager
+        from llm_proxifier.main import model_manager
         if not model_manager:
             raise HTTPException(status_code=503, detail="Model manager not available")
         
@@ -321,7 +321,7 @@ async def start_resource_group(resource_group: str):
 async def stop_resource_group(resource_group: str):
     """Stop all models in a resource group."""
     try:
-        from .main import model_manager
+        from llm_proxifier.main import model_manager
         if not model_manager:
             raise HTTPException(status_code=503, detail="Model manager not available")
         
@@ -341,7 +341,7 @@ async def stop_resource_group(resource_group: str):
 async def get_queue_status():
     """Get queue status for dashboard."""
     try:
-        from .main import queue_manager
+        from llm_proxifier.main import queue_manager
         if not queue_manager:
             raise HTTPException(status_code=503, detail="Queue manager not available")
         
@@ -355,7 +355,7 @@ async def get_queue_status():
 async def clear_queue_dashboard(model_name: str):
     """Clear queue for specific model (dashboard endpoint)."""
     try:
-        from .main import queue_manager
+        from llm_proxifier.main import queue_manager
         if not queue_manager:
             raise HTTPException(status_code=503, detail="Queue manager not available")
         
@@ -374,7 +374,7 @@ async def clear_queue_dashboard(model_name: str):
 async def bulk_model_operation(operation: BulkOperationModel):
     """Handle bulk operations on models."""
     try:
-        from .main import model_manager
+        from llm_proxifier.main import model_manager
         if not model_manager:
             raise HTTPException(status_code=503, detail="Model manager not available")
         
@@ -425,7 +425,7 @@ async def bulk_model_operation(operation: BulkOperationModel):
 async def get_models_config():
     """Get current model configuration."""
     try:
-        from .main import config_manager
+        from llm_proxifier.main import config_manager
         if not config_manager:
             raise HTTPException(status_code=503, detail="Config manager not available")
         
@@ -452,7 +452,7 @@ async def get_models_config():
 async def update_models_config(config_update: ConfigUpdateModel):
     """Update model configuration using ConfigurationManager."""
     try:
-        from .main import configuration_manager, model_manager, config_manager
+        from llm_proxifier.main import configuration_manager, model_manager, config_manager
         if not configuration_manager:
             raise HTTPException(status_code=503, detail="Configuration manager not available")
         
@@ -488,7 +488,7 @@ async def update_models_config(config_update: ConfigUpdateModel):
 async def get_auth_config():
     """Get current auth configuration (sanitized)."""
     try:
-        from .main import config_manager
+        from llm_proxifier.main import config_manager
         if not config_manager:
             raise HTTPException(status_code=503, detail="Config manager not available")
         
@@ -510,7 +510,7 @@ async def get_auth_config():
 async def update_auth_config(config_update: ConfigUpdateModel):
     """Update auth configuration using ConfigurationManager."""
     try:
-        from .main import configuration_manager, config_manager
+        from llm_proxifier.main import configuration_manager, config_manager
         if not configuration_manager:
             raise HTTPException(status_code=503, detail="Configuration manager not available")
         
@@ -546,7 +546,7 @@ async def update_auth_config(config_update: ConfigUpdateModel):
 async def list_config_backups(config_type: str = None):
     """List available configuration backups."""
     try:
-        from .main import configuration_manager
+        from llm_proxifier.main import configuration_manager
         if not configuration_manager:
             raise HTTPException(status_code=503, detail="Configuration manager not available")
         
@@ -573,7 +573,7 @@ async def list_config_backups(config_type: str = None):
 async def create_config_backup(config_type: str, description: str = "Manual backup"):
     """Create a backup of current configuration."""
     try:
-        from .main import configuration_manager
+        from llm_proxifier.main import configuration_manager
         if not configuration_manager:
             raise HTTPException(status_code=503, detail="Configuration manager not available")
         
@@ -598,7 +598,7 @@ async def create_config_backup(config_type: str, description: str = "Manual back
 async def restore_config_backup(config_type: str, backup_id: str):
     """Restore configuration from backup."""
     try:
-        from .main import configuration_manager, model_manager, config_manager
+        from llm_proxifier.main import configuration_manager, model_manager, config_manager
         if not configuration_manager:
             raise HTTPException(status_code=503, detail="Configuration manager not available")
         
@@ -636,7 +636,7 @@ async def restore_config_backup(config_type: str, backup_id: str):
 async def preview_config_changes(config_update: ConfigUpdateModel):
     """Preview configuration changes without applying."""
     try:
-        from .main import configuration_manager
+        from llm_proxifier.main import configuration_manager
         if not configuration_manager:
             raise HTTPException(status_code=503, detail="Configuration manager not available")
         
@@ -686,7 +686,7 @@ async def preview_config_changes(config_update: ConfigUpdateModel):
 async def health_check():
     """Simple health check endpoint for connection monitoring."""
     try:
-        from .main import queue_manager
+        from llm_proxifier.main import queue_manager
         
         health_status = {
             "status": "healthy",
@@ -717,7 +717,7 @@ async def health_check():
 async def get_queue_status():
     """Get comprehensive queue status for all models."""
     try:
-        from .main import queue_manager
+        from llm_proxifier.main import queue_manager
         if not queue_manager:
             raise HTTPException(status_code=503, detail="Queue manager not available")
         
@@ -734,7 +734,7 @@ async def get_queue_status():
 async def get_queue_history(model_name: str = None, limit: int = 50):
     """Get historical queue metrics for charts."""
     try:
-        from .main import queue_manager
+        from llm_proxifier.main import queue_manager
         if not queue_manager:
             raise HTTPException(status_code=503, detail="Queue manager not available")
         
@@ -754,7 +754,7 @@ async def get_queue_history(model_name: str = None, limit: int = 50):
 async def clear_model_queue(model_name: str):
     """Clear queue for a specific model."""
     try:
-        from .main import queue_manager
+        from llm_proxifier.main import queue_manager
         if not queue_manager:
             raise HTTPException(status_code=503, detail="Queue manager not available")
         
@@ -781,7 +781,7 @@ async def clear_model_queue(model_name: str):
 async def reset_queue_metrics(model_name: str = None):
     """Reset queue metrics for a model or all models."""
     try:
-        from .main import queue_manager
+        from llm_proxifier.main import queue_manager
         if not queue_manager:
             raise HTTPException(status_code=503, detail="Queue manager not available")
         

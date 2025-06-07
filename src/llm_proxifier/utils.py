@@ -8,7 +8,7 @@ import psutil
 import json
 from typing import List, Optional, AsyncGenerator, Dict, Any
 import httpx
-from .config import ModelConfig
+from llm_proxifier.config import ModelConfig
 
 
 def is_port_open(port: int, host: str = "127.0.0.1") -> bool:

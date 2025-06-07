@@ -10,15 +10,15 @@ from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from .config import ConfigManager
-from .model_manager import ModelManager
-from .proxy_handler import ProxyHandler
-from .queue_manager import QueueManager
-from .config_api import ConfigurationManager
-from .dashboard import dashboard_router
-from .auth import AuthManager
-from .middleware import AuthenticationMiddleware, RateLimitMiddleware
-from .utils import format_error_response, get_system_memory_usage
+from llm_proxifier.config import ConfigManager
+from llm_proxifier.model_manager import ModelManager
+from llm_proxifier.proxy_handler import ProxyHandler
+from llm_proxifier.queue_manager import QueueManager
+from llm_proxifier.config_api import ConfigurationManager
+from llm_proxifier.dashboard import dashboard_router
+from llm_proxifier.auth import AuthManager
+from llm_proxifier.middleware import AuthenticationMiddleware, RateLimitMiddleware
+from llm_proxifier.utils import format_error_response, get_system_memory_usage
 
 
 # Global instances
@@ -69,8 +69,8 @@ async def lifespan(app: FastAPI):
         auth_manager = AuthManager(config_manager)
         
         # Connect notification manager to WebSocket manager
-        from .config_notifications import config_notification_manager
-        from .dashboard import manager as websocket_manager
+        from llm_proxifier.config_notifications import config_notification_manager
+        from llm_proxifier.dashboard import manager as websocket_manager
         config_notification_manager.set_websocket_manager(websocket_manager)
         
         # Add authentication middleware
