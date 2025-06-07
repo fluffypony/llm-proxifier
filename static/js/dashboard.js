@@ -1,10 +1,12 @@
 // Dashboard JavaScript
-class Dashboard {
+class DashboardManager {
     constructor() {
         this.ws = null;
         this.autoRefresh = true;
         this.refreshInterval = null;
         this.data = null;
+        this.currentTab = 'overview';
+        this.components = {};
         
         this.init();
     }
@@ -13,8 +15,140 @@ class Dashboard {
         this.setupEventListeners();
         this.setupWebSocket();
         this.setupTheme();
+        this.setupTabs();
+        this.initializeComponents();
         this.startAutoRefresh();
         this.loadData();
+    }
+    
+    initializeComponents() {
+        // Initialize new component instances
+        this.components.priorityManager = window.priorityManager;
+        this.components.resourceGroupManager = window.resourceGroupManager;
+        this.components.queueMonitor = window.queueMonitor;
+        this.components.configEditor = window.configEditor;
+        
+        // Initialize components when their tabs are first shown
+        this.componentInitialized = {
+            overview: true, // Always initialized
+            priority: false,
+            groups: false,
+            queues: false,
+            config: false
+        };
+    }
+    
+    setupTabs() {
+        // Add tab navigation functionality
+        const tabButtons = document.querySelectorAll('.tab-button');
+        tabButtons.forEach(button => {
+            button.addEventListener('click', () => {
+                const tabName = button.dataset.tab;
+                this.switchTab(tabName);
+            });
+        });
+        
+        // Add keyboard shortcuts for tab switching
+        document.addEventListener('keydown', (e) => {
+            if (e.ctrlKey || e.metaKey) {
+                switch(e.key) {
+                    case '1':
+                        e.preventDefault();
+                        this.switchTab('overview');
+                        break;
+                    case '2':
+                        e.preventDefault();
+                        this.switchTab('priority');
+                        break;
+                    case '3':
+                        e.preventDefault();
+                        this.switchTab('groups');
+                        break;
+                    case '4':
+                        e.preventDefault();
+                        this.switchTab('queues');
+                        break;
+                    case '5':
+                        e.preventDefault();
+                        this.switchTab('config');
+                        break;
+                }
+            }
+        });
+    }
+    
+    switchTab(tabName) {
+        // Update active tab button
+        document.querySelectorAll('.tab-button').forEach(btn => {
+            btn.classList.remove('active');
+        });
+        
+        const activeButton = document.querySelector(`[data-tab="${tabName}"]`);
+        if (activeButton) {
+            activeButton.classList.add('active');
+        }
+        
+        // Hide all tab content
+        document.querySelectorAll('.tab-content').forEach(content => {
+            content.style.display = 'none';
+        });
+        
+        // Show selected tab content
+        const selectedTab = document.getElementById(`${tabName}-tab`);
+        if (selectedTab) {
+            selectedTab.style.display = 'block';
+        }
+        
+        // Initialize component if not already done
+        if (!this.componentInitialized[tabName] && this.components[this.getComponentName(tabName)]) {
+            this.initializeTabComponent(tabName);
+            this.componentInitialized[tabName] = true;
+        }
+        
+        this.currentTab = tabName;
+        
+        // Update URL hash without triggering reload
+        window.history.replaceState(null, null, `#${tabName}`);
+    }
+    
+    getComponentName(tabName) {
+        const componentMap = {
+            'priority': 'priorityManager',
+            'groups': 'resourceGroupManager',
+            'queues': 'queueMonitor',
+            'config': 'configEditor'
+        };
+        return componentMap[tabName];
+    }
+    
+    async initializeTabComponent(tabName) {
+        try {
+            switch(tabName) {
+                case 'priority':
+                    if (this.components.priorityManager) {
+                        await this.components.priorityManager.initialize();
+                    }
+                    break;
+                case 'groups':
+                    if (this.components.resourceGroupManager) {
+                        await this.components.resourceGroupManager.initialize();
+                    }
+                    break;
+                case 'queues':
+                    if (this.components.queueMonitor) {
+                        await this.components.queueMonitor.initialize();
+                    }
+                    break;
+                case 'config':
+                    if (this.components.configEditor) {
+                        await this.components.configEditor.initialize();
+                    }
+                    break;
+            }
+        } catch (error) {
+            console.error(`Error initializing ${tabName} component:`, error);
+            this.showNotification(`Error loading ${tabName} tab: ${error.message}`, 'error');
+        }
     }
     
     setupEventListeners() {
@@ -154,6 +288,29 @@ class Dashboard {
         this.updateSystemOverview(data);
         this.updateModels(data);
         this.updateLastUpdate();
+        
+        // Notify components of data updates
+        this.notifyComponents(data);
+    }
+    
+    notifyComponents(data) {
+        // Update components with new data if they're initialized
+        if (this.componentInitialized.priority && this.components.priorityManager) {
+            // Priority manager will handle its own refresh
+        }
+        
+        if (this.componentInitialized.groups && this.components.resourceGroupManager) {
+            // Resource group manager will handle its own refresh
+        }
+        
+        if (this.componentInitialized.queues && this.components.queueMonitor) {
+            // Queue monitor handles its own auto-refresh
+        }
+    }
+    
+    // Public method for components to refresh dashboard data
+    async refreshStatus() {
+        await this.loadData();
     }
     
     updateSystemOverview(data) {
@@ -200,6 +357,7 @@ class Dashboard {
     createModelCard(modelName, model) {
         const card = document.createElement('div');
         card.className = 'model-card';
+        card.dataset.modelName = modelName;
         
         const statusClass = model.status === 'running' ? 'running' : 
                           model.status === 'starting' ? 'starting' : 'stopped';
@@ -213,6 +371,12 @@ class Dashboard {
                 <div class="model-status ${statusClass}">
                     <span class="status-indicator ${statusIndicator}"></span>
                     ${model.status}
+                </div>
+                <div class="model-priority" title="Priority: ${model.priority || 5}">
+                    P${model.priority || 5}
+                </div>
+                <div class="model-group" title="Resource Group: ${model.resource_group || 'default'}">
+                    <span class="group-badge">${model.resource_group || 'default'}</span>
                 </div>
             </div>
             <div class="model-info">
@@ -242,14 +406,105 @@ class Dashboard {
                 </div>
             </div>
             <div class="model-controls">
-                ${model.status === 'running' ? 
-                    `<button class="btn btn-danger" onclick="dashboard.stopModel('${modelName}')">Stop</button>` :
-                    `<button class="btn btn-success" onclick="dashboard.startModel('${modelName}')">Start</button>`
-                }
+                <div class="control-group">
+                    ${model.status === 'running' ? 
+                        `<button class="btn btn-danger" onclick="dashboardManager.stopModel('${modelName}')">Stop</button>` :
+                        `<button class="btn btn-success" onclick="dashboardManager.startModel('${modelName}')">Start</button>`
+                    }
+                    <button class="btn btn-secondary btn-sm" onclick="dashboardManager.showModelDetails('${modelName}')" title="Model Details">
+                        📊
+                    </button>
+                </div>
+                <div class="bulk-select">
+                    <input type="checkbox" id="select-${modelName}" name="model-select" value="${modelName}">
+                    <label for="select-${modelName}" title="Select for bulk actions"></label>
+                </div>
             </div>
         `;
         
         return card;
+    }
+    
+    showModelDetails(modelName) {
+        const model = this.data?.models?.[modelName];
+        if (!model) return;
+        
+        const modal = this.createModelDetailsModal(modelName, model);
+        document.body.appendChild(modal);
+        modal.classList.add('show');
+    }
+    
+    createModelDetailsModal(modelName, model) {
+        const modal = document.createElement('div');
+        modal.className = 'modal model-details-modal';
+        modal.innerHTML = `
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>Model Details: ${modelName}</h3>
+                    <button class="modal-close" onclick="this.closest('.modal').remove()">×</button>
+                </div>
+                <div class="modal-body">
+                    <div class="details-grid">
+                        <div class="detail-item">
+                            <span class="detail-label">Status:</span>
+                            <span class="detail-value ${model.status}">${model.status}</span>
+                        </div>
+                        <div class="detail-item">
+                            <span class="detail-label">Port:</span>
+                            <span class="detail-value">${model.port}</span>
+                        </div>
+                        <div class="detail-item">
+                            <span class="detail-label">Priority:</span>
+                            <span class="detail-value">${model.priority || 5}</span>
+                        </div>
+                        <div class="detail-item">
+                            <span class="detail-label">Resource Group:</span>
+                            <span class="detail-value">${model.resource_group || 'default'}</span>
+                        </div>
+                        <div class="detail-item">
+                            <span class="detail-label">Model Path:</span>
+                            <span class="detail-value">${model.model_path || 'N/A'}</span>
+                        </div>
+                        <div class="detail-item">
+                            <span class="detail-label">Context Length:</span>
+                            <span class="detail-value">${model.context_length || 'N/A'}</span>
+                        </div>
+                        <div class="detail-item">
+                            <span class="detail-label">GPU Layers:</span>
+                            <span class="detail-value">${model.gpu_layers || 'N/A'}</span>
+                        </div>
+                        <div class="detail-item">
+                            <span class="detail-label">Uptime:</span>
+                            <span class="detail-value">${model.uptime || 'N/A'}</span>
+                        </div>
+                        <div class="detail-item">
+                            <span class="detail-label">Memory Usage:</span>
+                            <span class="detail-value">${model.memory_usage_mb?.toFixed(0) || 0} MB</span>
+                        </div>
+                        <div class="detail-item">
+                            <span class="detail-label">CPU Usage:</span>
+                            <span class="detail-value">${model.cpu_usage_percent?.toFixed(1) || 0}%</span>
+                        </div>
+                        <div class="detail-item">
+                            <span class="detail-label">Request Count:</span>
+                            <span class="detail-value">${model.request_count || 0}</span>
+                        </div>
+                        <div class="detail-item">
+                            <span class="detail-label">Last Accessed:</span>
+                            <span class="detail-value">${model.last_accessed || 'Never'}</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" onclick="this.closest('.modal').remove()">Close</button>
+                    ${model.status === 'running' ? 
+                        `<button class="btn btn-danger" onclick="dashboardManager.stopModel('${modelName}'); this.closest('.modal').remove();">Stop Model</button>` :
+                        `<button class="btn btn-success" onclick="dashboardManager.startModel('${modelName}'); this.closest('.modal').remove();">Start Model</button>`
+                    }
+                </div>
+            </div>
+        `;
+        return modal;
     }
     
     async startModel(modelName) {
@@ -366,20 +621,145 @@ class Dashboard {
         this.showNotification(message, 'error');
     }
     
-    showNotification(message, type) {
-        // Simple console logging for now - could be enhanced with toast notifications
-        console[type === 'error' ? 'error' : 'log'](message);
+    showNotification(message, type = 'info') {
+        // Create notification element
+        const notification = document.createElement('div');
+        notification.className = `notification notification-${type}`;
+        notification.textContent = message;
         
-        // Could add toast notification here in the future
-        alert(message);
+        // Add to page
+        const container = document.body;
+        container.appendChild(notification);
+        
+        // Show with animation
+        setTimeout(() => notification.classList.add('show'), 10);
+        
+        // Remove after delay
+        setTimeout(() => {
+            notification.classList.remove('show');
+            setTimeout(() => container.removeChild(notification), 300);
+        }, 3000);
+    }
+    
+    // Handle bulk operations
+    handleBulkOperations() {
+        const selectedModels = this.getSelectedModels();
+        if (selectedModels.length === 0) {
+            this.showNotification('No models selected', 'warning');
+            return;
+        }
+        
+        // Add bulk action buttons if not already present
+        this.addBulkActionButtons();
+    }
+    
+    getSelectedModels() {
+        const checkboxes = document.querySelectorAll('input[name="model-select"]:checked');
+        return Array.from(checkboxes).map(cb => cb.value);
+    }
+    
+    addBulkActionButtons() {
+        let bulkActions = document.querySelector('.bulk-actions');
+        if (!bulkActions) {
+            bulkActions = document.createElement('div');
+            bulkActions.className = 'bulk-actions';
+            bulkActions.innerHTML = `
+                <div class="bulk-actions-content">
+                    <span class="selected-count">0 models selected</span>
+                    <button class="btn btn-success btn-sm" onclick="dashboardManager.bulkStartSelected()">Start Selected</button>
+                    <button class="btn btn-danger btn-sm" onclick="dashboardManager.bulkStopSelected()">Stop Selected</button>
+                    <button class="btn btn-secondary btn-sm" onclick="dashboardManager.clearSelection()">Clear Selection</button>
+                </div>
+            `;
+            
+            const modelsGrid = document.getElementById('models-grid');
+            modelsGrid.parentNode.insertBefore(bulkActions, modelsGrid);
+        }
+        
+        // Update selected count
+        const selectedCount = this.getSelectedModels().length;
+        const countSpan = bulkActions.querySelector('.selected-count');
+        countSpan.textContent = `${selectedCount} models selected`;
+        
+        // Show/hide bulk actions
+        bulkActions.style.display = selectedCount > 0 ? 'block' : 'none';
+    }
+    
+    async bulkStartSelected() {
+        const selectedModels = this.getSelectedModels();
+        for (const modelName of selectedModels) {
+            await this.startModel(modelName);
+        }
+        this.clearSelection();
+    }
+    
+    async bulkStopSelected() {
+        const selectedModels = this.getSelectedModels();
+        if (!confirm(`Stop ${selectedModels.length} selected models?`)) return;
+        
+        for (const modelName of selectedModels) {
+            try {
+                await fetch(`/dashboard/api/models/${modelName}/stop`, { method: 'POST' });
+            } catch (error) {
+                console.error(`Error stopping ${modelName}:`, error);
+            }
+        }
+        this.clearSelection();
+    }
+    
+    clearSelection() {
+        document.querySelectorAll('input[name="model-select"]').forEach(cb => {
+            cb.checked = false;
+        });
+        this.addBulkActionButtons(); // Update UI
+    }
+    
+    // Initialize from URL hash
+    initializeFromHash() {
+        const hash = window.location.hash.substring(1);
+        if (hash && ['overview', 'priority', 'groups', 'queues', 'config'].includes(hash)) {
+            this.switchTab(hash);
+        }
+    }
+    
+    destroy() {
+        // Clean up components
+        Object.values(this.components).forEach(component => {
+            if (component && typeof component.destroy === 'function') {
+                component.destroy();
+            }
+        });
+        
+        this.stopAutoRefresh();
+        
+        if (this.ws) {
+            this.ws.close();
+        }
     }
 }
 
 // Initialize dashboard when page loads
-let dashboard;
+let dashboardManager;
 document.addEventListener('DOMContentLoaded', () => {
-    dashboard = new Dashboard();
+    dashboardManager = new DashboardManager();
+    
+    // Initialize from URL hash
+    dashboardManager.initializeFromHash();
+    
+    // Add event listeners for model selection
+    document.addEventListener('change', (e) => {
+        if (e.target.name === 'model-select') {
+            dashboardManager.addBulkActionButtons();
+        }
+    });
+    
+    // Modal backdrop click to close
+    document.addEventListener('click', (e) => {
+        if (e.target.classList.contains('modal')) {
+            e.target.remove();
+        }
+    });
 });
 
 // Make dashboard available globally for onclick handlers
-window.dashboard = dashboard;
+window.dashboardManager = dashboardManager;
