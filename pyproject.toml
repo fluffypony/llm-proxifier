@@ -61,14 +61,14 @@ Documentation = "https://github.com/fluffypony/llm-proxifier/blob/main/README.md
 [project.scripts]
 llm-proxifier = "llm_proxifier.cli:main"
 
-[tool.setuptools]
-packages = {"llm_proxifier" = "src"}
+[tool.setuptools.packages.find]
+where = ["src"]
 
 [tool.setuptools.dynamic]
-version = {attr = "llm_proxifier._version.__version__"}
+version = {attr = "_version.__version__"}
 
 [tool.setuptools.package-data]
-llm_proxifier = ["py.typed"]
+"*" = ["py.typed"]
 
 [tool.black]
 line-length = 100
