@@ -217,10 +217,37 @@ class ModelManager:
             config = self.configs[model_name]
             instance = ModelInstance(config=config)
             
+            # Notify about model starting
+            try:
+                from src.config_notifications import config_notification_manager
+                await config_notification_manager.notify_model_reload(
+                    model_name, "starting", {"port": config.port}
+                )
+            except Exception as e:
+                self.logger.error(f"Error sending model start notification: {e}")
+            
             if await instance.start(self.queue_manager):
                 self.models[model_name] = instance
+                
+                # Notify about successful model start
+                try:
+                    from src.config_notifications import config_notification_manager
+                    await config_notification_manager.notify_model_reload(
+                        model_name, "completed", {"api_url": instance.api_url, "port": config.port}
+                    )
+                except Exception as e:
+                    self.logger.error(f"Error sending model start notification: {e}")
+                
                 return instance
             else:
+                # Notify about failed model start
+                try:
+                    from src.config_notifications import config_notification_manager
+                    await config_notification_manager.notify_model_reload(
+                        model_name, "failed", {"error": "Model failed to start"}
+                    )
+                except Exception as e:
+                    self.logger.error(f"Error sending model start failure notification: {e}")
                 return None
     
     async def stop_model(self, model_name: str) -> bool:

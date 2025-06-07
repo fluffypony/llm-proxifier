@@ -68,6 +68,11 @@ async def lifespan(app: FastAPI):
         # Initialize authentication manager
         auth_manager = AuthManager(config_manager)
         
+        # Connect notification manager to WebSocket manager
+        from src.config_notifications import config_notification_manager
+        from src.dashboard import manager as websocket_manager
+        config_notification_manager.set_websocket_manager(websocket_manager)
+        
         # Add authentication middleware
         app.add_middleware(AuthenticationMiddleware, auth_manager=auth_manager)
         app.add_middleware(RateLimitMiddleware, auth_manager=auth_manager)
