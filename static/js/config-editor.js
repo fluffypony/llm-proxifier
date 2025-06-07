@@ -260,29 +260,83 @@ class ConfigEditor {
     }
 
     renderValidationResults() {
+        return this.displayValidationErrors(this.validationErrors, this.validationWarnings);
+    }
+
+    displayValidationErrors(errors, warnings = []) {
         let html = '<h4>Validation Results</h4>';
         
-        if (this.validationErrors.length === 0 && this.validationWarnings.length === 0) {
+        if (errors.length === 0 && warnings.length === 0) {
             html += '<div class="validation-success">✅ Configuration is valid</div>';
-        } else {
-            if (this.validationErrors.length > 0) {
-                html += '<div class="validation-errors"><h5>Errors:</h5><ul>';
-                this.validationErrors.forEach(error => {
-                    html += `<li class="error">❌ ${error}</li>`;
-                });
-                html += '</ul></div>';
-            }
-            
-            if (this.validationWarnings.length > 0) {
-                html += '<div class="validation-warnings"><h5>Warnings:</h5><ul>';
-                this.validationWarnings.forEach(warning => {
-                    html += `<li class="warning">⚠️ ${warning}</li>`;
-                });
-                html += '</ul></div>';
-            }
+            return html;
+        }
+        
+        if (errors.length > 0) {
+            html += `
+                <div class="validation-section errors">
+                    <h4><span class="error-icon">❌</span> Validation Errors (${errors.length})</h4>
+                    <ul class="validation-list">
+                        ${errors.map(error => `
+                            <li class="validation-error">
+                                <span class="error-text">${this.escapeHtml(error)}</span>
+                                <button class="btn btn-xs btn-secondary" onclick="configEditor.highlightErrorLocation('${this.escapeHtml(error)}')">
+                                    Show Location
+                                </button>
+                            </li>
+                        `).join('')}
+                    </ul>
+                </div>
+            `;
+        }
+        
+        if (warnings.length > 0) {
+            html += `
+                <div class="validation-section warnings">
+                    <h4><span class="warning-icon">⚠️</span> Warnings (${warnings.length})</h4>
+                    <ul class="validation-list">
+                        ${warnings.map(warning => `
+                            <li class="validation-warning">
+                                <span class="warning-text">${this.escapeHtml(warning)}</span>
+                            </li>
+                        `).join('')}
+                    </ul>
+                </div>
+            `;
         }
         
         return html;
+    }
+
+    escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    highlightErrorLocation(errorText) {
+        // Attempt to find and highlight the problematic configuration section
+        console.log('Highlighting error location for:', errorText);
+        
+        // Parse error text to extract model name if present
+        const modelMatch = errorText.match(/Model "([^"]+)":/);
+        if (modelMatch) {
+            const modelName = modelMatch[1];
+            this.highlightModelInEditor(modelName);
+        }
+        
+        // Show notification about the error location
+        this.showNotification(`Located error in configuration for: ${errorText}`, 'info');
+    }
+
+    highlightModelInEditor(modelName) {
+        // This would need to interact with the specific editor being used
+        // For now, we'll just show which model has the error
+        const editorContainer = document.getElementById('config-editor');
+        if (editorContainer) {
+            // Find and highlight the model section in the editor
+            // Implementation would depend on the specific editor (CodeMirror, Monaco, etc.)
+            console.log(`Highlighting model: ${modelName} in editor`);
+        }
     }
 
     updateValidationResults() {
