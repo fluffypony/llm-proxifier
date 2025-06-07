@@ -681,6 +681,37 @@ async def preview_config_changes(config_update: ConfigUpdateModel):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# Health Check Endpoint
+@dashboard_router.get("/api/health")
+async def health_check():
+    """Simple health check endpoint for connection monitoring."""
+    try:
+        from src.main import queue_manager
+        
+        health_status = {
+            "status": "healthy",
+            "timestamp": datetime.now().isoformat(),
+            "queue_manager_available": queue_manager is not None,
+            "version": "1.0.0"
+        }
+        
+        # Basic queue manager connectivity test
+        if queue_manager:
+            try:
+                # Try to get a simple stat to verify queue manager is responsive
+                test_stats = queue_manager.get_queue_stats()
+                health_status["queue_manager_responsive"] = True
+                health_status["model_count"] = len(test_stats) if test_stats else 0
+            except Exception as e:
+                health_status["queue_manager_responsive"] = False
+                health_status["queue_manager_error"] = str(e)
+        
+        return health_status
+    except Exception as e:
+        logger.error(f"Health check failed: {e}")
+        raise HTTPException(status_code=503, detail="Service temporarily unavailable")
+
+
 # Queue Management Endpoints
 @dashboard_router.get("/api/queue/status")
 async def get_queue_status():
