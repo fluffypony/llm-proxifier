@@ -679,3 +679,95 @@ async def preview_config_changes(config_update: ConfigUpdateModel):
     except Exception as e:
         logger.error(f"Error previewing config changes: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# Queue Management Endpoints
+@dashboard_router.get("/api/queue/status")
+async def get_queue_status():
+    """Get comprehensive queue status for all models."""
+    try:
+        from src.main import queue_manager
+        if not queue_manager:
+            raise HTTPException(status_code=503, detail="Queue manager not available")
+        
+        # Get queue statistics from enhanced queue manager
+        queue_stats = queue_manager.get_queue_stats()
+        
+        return queue_stats
+    except Exception as e:
+        logger.error(f"Error getting queue status: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@dashboard_router.get("/api/queue/history")
+async def get_queue_history(model_name: str = None, limit: int = 50):
+    """Get historical queue metrics for charts."""
+    try:
+        from src.main import queue_manager
+        if not queue_manager:
+            raise HTTPException(status_code=503, detail="Queue manager not available")
+        
+        # Get historical metrics from enhanced queue manager
+        historical_data = queue_manager.get_historical_metrics(model_name, limit)
+        
+        return {
+            "historical_data": historical_data,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+    except Exception as e:
+        logger.error(f"Error getting queue history: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@dashboard_router.post("/api/queue/{model_name}/clear")
+async def clear_model_queue(model_name: str):
+    """Clear queue for a specific model."""
+    try:
+        from src.main import queue_manager
+        if not queue_manager:
+            raise HTTPException(status_code=503, detail="Queue manager not available")
+        
+        # Clear the queue for the model
+        queue_manager.clear_model_queue(model_name)
+        
+        # Broadcast queue clear event via WebSocket
+        await manager.broadcast_json({
+            "type": "queue_cleared",
+            "model_name": model_name,
+            "timestamp": datetime.utcnow().isoformat()
+        })
+        
+        return {
+            "success": True,
+            "message": f"Queue cleared for model {model_name}"
+        }
+    except Exception as e:
+        logger.error(f"Error clearing queue for {model_name}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@dashboard_router.post("/api/queue/reset-metrics")
+async def reset_queue_metrics(model_name: str = None):
+    """Reset queue metrics for a model or all models."""
+    try:
+        from src.main import queue_manager
+        if not queue_manager:
+            raise HTTPException(status_code=503, detail="Queue manager not available")
+        
+        # Reset metrics
+        queue_manager.reset_metrics(model_name)
+        
+        # Broadcast metrics reset event via WebSocket
+        await manager.broadcast_json({
+            "type": "metrics_reset",
+            "model_name": model_name or "all",
+            "timestamp": datetime.utcnow().isoformat()
+        })
+        
+        return {
+            "success": True,
+            "message": f"Metrics reset for {model_name or 'all models'}"
+        }
+    except Exception as e:
+        logger.error(f"Error resetting metrics: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
