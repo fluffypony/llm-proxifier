@@ -11,8 +11,11 @@ class QueueMonitor {
         this.refreshRate = 5000; // 5 seconds default
         this.maxHistoryPoints = 60; // Keep last 60 data points
         this.isPaused = false;
+        this.errorCount = 0;
+        this.isOnline = navigator.onLine;
         
         this.initializeEventListeners();
+        this.setupOfflineDetection();
     }
 
     async initialize() {
@@ -24,21 +27,47 @@ class QueueMonitor {
 
     async loadQueueStatus() {
         try {
-            const response = await fetch('/dashboard/api/queue/status');
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 10000);
+            
+            const response = await fetch('/dashboard/api/queue/status', {
+                signal: controller.signal
+            });
+            
+            clearTimeout(timeoutId);
+            
             if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
+                // Enhanced error handling based on status code
+                if (response.status === 503) {
+                    throw new Error('Queue manager temporarily unavailable');
+                } else if (response.status >= 500) {
+                    throw new Error(`Server error: ${response.status}`);
+                } else if (response.status === 404) {
+                    throw new Error('Queue status endpoint not found');
+                } else {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
             }
             
             const newData = await response.json();
-            this.queueData = newData;
             
-            // Update historical data
+            // Validate response format
+            if (!this.validateQueueData(newData)) {
+                throw new Error('Invalid queue data format received');
+            }
+            
+            this.queueData = newData;
             this.updateHistoricalData(newData);
+            
+            // Clear any previous error state
+            this.clearErrorState();
             
             return newData;
         } catch (error) {
             console.error('Error loading queue status:', error);
-            this.showNotification('Error loading queue status: ' + error.message, 'error');
+            
+            // Enhanced error handling with retry logic
+            this.handleLoadError(error);
             return {};
         }
     }
@@ -80,6 +109,88 @@ class QueueMonitor {
                 }
             });
         }
+    }
+
+    validateQueueData(data) {
+        // Validate that data has expected structure
+        if (!data || typeof data !== 'object') return false;
+        
+        for (const [modelName, queueInfo] of Object.entries(data)) {
+            if (!queueInfo || typeof queueInfo !== 'object') return false;
+            // Check for required fields
+            const requiredFields = ['depth', 'avg_wait_time', 'requests_per_minute'];
+            for (const field of requiredFields) {
+                if (queueInfo[field] === undefined) return false;
+            }
+        }
+        return true;
+    }
+
+    handleLoadError(error) {
+        this.errorCount = (this.errorCount || 0) + 1;
+        
+        // Show error in UI
+        this.showErrorState(error.message);
+        
+        // Implement exponential backoff for retries
+        if (this.errorCount < 5) {
+            const retryDelay = Math.min(1000 * Math.pow(2, this.errorCount), 30000);
+            setTimeout(() => {
+                this.loadQueueStatus();
+            }, retryDelay);
+        } else {
+            // Stop auto-refresh after 5 consecutive failures
+            this.stopAutoRefresh();
+            this.showNotification('Auto-refresh disabled due to repeated errors. Click refresh to try again.', 'error');
+        }
+    }
+
+    showErrorState(message) {
+        const container = document.getElementById('queue-dashboard');
+        if (!container) return;
+        
+        const errorBanner = document.createElement('div');
+        errorBanner.className = 'error-banner';
+        errorBanner.innerHTML = `
+            <div class="error-content">
+                <span class="error-icon">⚠️</span>
+                <span class="error-message">${message}</span>
+                <button class="btn btn-sm btn-secondary" onclick="queueMonitor.refreshNow()">Retry</button>
+            </div>
+        `;
+        
+        // Remove existing error banner
+        const existingBanner = container.querySelector('.error-banner');
+        if (existingBanner) {
+            existingBanner.remove();
+        }
+        
+        container.insertBefore(errorBanner, container.firstChild);
+    }
+
+    clearErrorState() {
+        this.errorCount = 0;
+        const errorBanner = document.querySelector('.error-banner');
+        if (errorBanner) {
+            errorBanner.remove();
+        }
+    }
+
+    setupOfflineDetection() {
+        window.addEventListener('online', () => {
+            this.isOnline = true;
+            this.clearErrorState();
+            this.showNotification('Connection restored', 'success');
+            if (!this.isPaused) {
+                this.startAutoRefresh();
+            }
+        });
+        
+        window.addEventListener('offline', () => {
+            this.isOnline = false;
+            this.stopAutoRefresh();
+            this.showErrorState('No internet connection');
+        });
     }
 
     renderQueueDashboard() {
