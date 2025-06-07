@@ -242,6 +242,26 @@ curl http://localhost:8000/v1/models
 curl http://localhost:8000/health
 ```
 
+### Dashboard Health Check
+
+The dashboard includes an enhanced health endpoint for connection monitoring:
+
+```bash
+curl http://localhost:8000/dashboard/api/health
+```
+
+Response format:
+```json
+{
+  "status": "healthy",
+  "timestamp": "2024-01-15T10:30:00Z",
+  "queue_manager_available": true,
+  "queue_manager_responsive": true,
+  "model_count": 3,
+  "version": "1.0.0"
+}
+```
+
 ### Metrics
 
 ```bash
@@ -349,6 +369,38 @@ http://localhost:8000/dashboard
 - **Bulk Operations**: Start/stop multiple models or entire resource groups
 - **Performance Metrics**: CPU, memory usage, and request statistics
 
+### Enhanced Error Handling & Monitoring
+
+LLM Proxifier now includes comprehensive error handling and connection monitoring:
+
+- **Connection Health Monitoring**: Automatic health checks every 30 seconds with visual status indicators
+- **Network Resilience**: Request timeouts (10s), exponential backoff retry logic, and graceful degradation
+- **Offline Detection**: Browser connection state monitoring with automatic retry on reconnection
+- **Enhanced Error Display**: Structured validation errors with location highlighting in configuration editor
+- **Visual Feedback**: Error banners, health status indicators, and retry buttons throughout the UI
+- **Robust Queue Monitoring**: Data validation, error recovery, and connection state awareness
+- **Dark Theme Support**: Complete styling for all error states and health indicators
+
+#### Error Handling Features
+
+**Network Error Recovery:**
+- Automatic retry with exponential backoff (up to 5 attempts)
+- Request timeout protection (10 seconds)
+- Connection state monitoring with visual feedback
+- Graceful degradation when services are unavailable
+
+**User Experience:**
+- Clear error messages with specific HTTP status code handling
+- Visual error banners with manual retry options
+- Health status indicators at the top of the page
+- Structured validation error display with "Show Location" buttons
+
+**Configuration Validation:**
+- Enhanced error display with HTML escaping and security
+- Location highlighting for configuration errors
+- Comprehensive validation with both errors and warnings
+- Real-time validation feedback during editing
+
 ### Dashboard Screenshots
 
 The dashboard provides:
@@ -439,9 +491,36 @@ curl -X POST http://localhost:8000/admin/models/model-name/reload
 ### Dashboard Issues
 
 1. **Dashboard not loading**: Check if port 8000 is accessible
-2. **Real-time updates not working**: Verify WebSocket connection
+2. **Real-time updates not working**: Verify WebSocket connection  
 3. **Authentication required**: Check `dashboard_auth_required` in auth.yaml
 4. **Configuration editor errors**: Validate YAML syntax before saving
+
+### Error Handling & Connection Issues
+
+The dashboard now includes comprehensive error handling and monitoring:
+
+1. **Connection health monitoring**: Automatic health checks every 30 seconds
+2. **Network error recovery**: Exponential backoff retry with up to 5 attempts
+3. **Offline detection**: Visual indicators when internet connection is lost
+4. **Error banners**: Clear error messages with manual retry options
+
+**If you see connection issues:**
+```bash
+# Test the dashboard health endpoint
+curl http://localhost:8000/dashboard/api/health
+
+# Check if queue manager is responsive
+curl http://localhost:8000/dashboard/api/queue/status
+
+# Verify basic connectivity
+curl http://localhost:8000/health
+```
+
+**Dashboard error indicators:**
+- **Red banner at top**: Connection issues detected
+- **Warning icon in queue monitor**: Queue data validation failed  
+- **Retry buttons**: Manual retry options for failed operations
+- **Auto-refresh disabled**: After 5 consecutive failures (click refresh to re-enable)
 
 ## 📊 Monitoring
 
@@ -473,8 +552,20 @@ llm-proxifier/
 │   ├── main.py              # FastAPI application
 │   ├── model_manager.py     # Model lifecycle management
 │   ├── proxy_handler.py     # Request proxying
+│   ├── dashboard.py         # Dashboard API endpoints
+│   ├── queue_manager.py     # Queue management system
 │   ├── config.py            # Configuration management
 │   └── utils.py             # Utility functions
+├── static/
+│   ├── js/
+│   │   ├── queue-monitor.js     # Enhanced queue monitoring with error handling
+│   │   ├── config-editor.js     # Configuration editor with validation
+│   │   ├── connection-health.js # Connection health monitoring system
+│   │   └── dashboard.js         # Main dashboard functionality
+│   └── css/
+│       └── dashboard.css        # Dashboard styling with error states
+├── templates/
+│   └── dashboard.html       # Dashboard HTML template
 ├── config/
 │   └── models.yaml          # Model configurations
 ├── scripts/
