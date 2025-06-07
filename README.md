@@ -4,14 +4,32 @@ A lightweight, intelligent proxy server that manages multiple LLaMA models on-de
 
 ## 🚀 Features
 
+### Core Functionality
 - **OpenAI-Compatible API**: Drop-in replacement for OpenAI endpoints (`/v1/chat/completions`, `/v1/completions`)
 - **On-Demand Model Loading**: Models start automatically when requested and stop after inactivity
 - **Multi-Model Support**: Run multiple models simultaneously with configurable limits
-- **Automatic Lifecycle Management**: 2-minute timeout with graceful shutdown
-- **Health Monitoring**: Built-in health checks and metrics endpoints
-- **Admin Interface**: Manual model control and status monitoring
 - **Streaming Support**: Full server-sent events (SSE) streaming support
+
+### Advanced Model Management
+- **Priority-Based Loading**: Configure model startup order with priority levels (1-10)
+- **Resource Groups**: Organize models for bulk operations and management
+- **Auto-Start & Preload**: Automatically start critical models on server startup
+- **Hot Model Swapping**: Update model configurations without server restart
+- **Request Queuing**: Intelligent request queuing during model transitions
+
+### Administration & Monitoring
+- **Advanced Dashboard**: Web-based interface with real-time monitoring
+- **Queue Status Monitoring**: Real-time queue depth and request tracking
+- **Configuration Management**: Hot-reload configurations with backup/restore
+- **Health Monitoring**: Built-in health checks and comprehensive metrics
 - **Resource Monitoring**: Memory and CPU usage tracking per model
+- **Bulk Operations**: Start/stop multiple models or entire resource groups
+
+### Security & Authentication
+- **API Key Authentication**: Configurable API key management with permissions
+- **Rate Limiting**: Per-key rate limiting with configurable thresholds
+- **Dashboard Authentication**: Optional authentication for admin interface
+- **Public Endpoints**: Configure endpoints that don't require authentication
 
 ## 📋 Requirements
 
@@ -63,13 +81,88 @@ pip install -r requirements.txt
 python -m uvicorn src.main:app --host 0.0.0.0 --port 8000
 ```
 
-### Docker (Alternative)
+### Docker
 
 ```bash
-# TODO: Docker support coming soon
+# Build the Docker image
+docker build -t llm-proxifier .
+
+# Run with volume mounts for models and config
+docker run -d \
+  --name llm-proxifier \
+  -p 8000:8000 \
+  -v $(pwd)/models:/app/models \
+  -v $(pwd)/config:/app/config \
+  -e LLM_PROXY_HOST=0.0.0.0 \
+  -e LLM_PROXY_PORT=8000 \
+  -e LLM_PROXY_MAX_CONCURRENT=4 \
+  llm-proxifier
+
+# For GPU support (requires NVIDIA Docker runtime)
+docker run -d \
+  --name llm-proxifier-gpu \
+  --gpus all \
+  -p 8000:8000 \
+  -v $(pwd)/models:/app/models \
+  -v $(pwd)/config:/app/config \
+  llm-proxifier
+```
+
+### pipx Installation (Recommended for system-wide use)
+
+```bash
+# Install globally with pipx
+pipx install llm-proxifier
+
+# Run with custom config
+llm-proxifier --config-dir /path/to/your/config --port 8000
 ```
 
 ## ⚙️ Configuration
+
+### Advanced Model Configuration
+
+LLM Proxifier now supports advanced model management features:
+
+```yaml
+models:
+  # High-priority model that starts automatically
+  qwen-32b:
+    port: 11001
+    model_path: "./models/qwen-32b/qwen2.5-coder-32b-instruct-q4_k_m.gguf"
+    priority: 9                    # Higher priority loads first (1-10)
+    resource_group: "coding"       # Group models for bulk operations
+    auto_start: true              # Start automatically on server startup
+    preload: false                # Keep running permanently (use sparingly)
+    context_length: 32768
+    gpu_layers: -1
+    chat_format: chatml
+
+  # Production model that's always ready
+  llama-70b:
+    port: 11004
+    model_path: "./models/llama-70b/Meta-Llama-3-70B-Instruct-Q4_K_M.gguf"
+    priority: 10                  # Highest priority
+    resource_group: "production"
+    auto_start: true
+    preload: true                 # Always keep running
+    context_length: 8192
+    gpu_layers: -1
+    chat_format: llama-2
+
+  # Development model with lower priority
+  llama-7b:
+    port: 11005
+    model_path: "./models/llama-7b/llama-2-7b-chat.gguf"
+    priority: 3                   # Lower priority
+    resource_group: "development"
+    auto_start: false             # Start only when requested
+    preload: false
+    context_length: 4096
+    gpu_layers: 20
+```
+
+### Basic Configuration
 
 Edit `config/models.yaml` to configure your models:
 
@@ -157,23 +250,113 @@ curl http://localhost:8000/metrics
 
 ## 🎮 Admin Endpoints
 
-### Start a Model Manually
+### Model Management
 
 ```bash
+# Start a model manually
 curl -X POST http://localhost:8000/admin/models/qwen-32b/start
-```
 
-### Stop a Model
-
-```bash
+# Stop a model
 curl -X POST http://localhost:8000/admin/models/qwen-32b/stop
+
+# Get model status
+curl http://localhost:8000/admin/models/qwen-32b/status
+
+# Get all models status
+curl http://localhost:8000/admin/models/status
+
+# Hot reload a model configuration
+curl -X POST http://localhost:8000/admin/models/qwen-32b/reload
 ```
 
-### Get Model Status
+### Bulk Operations
 
 ```bash
-curl http://localhost:8000/admin/models/qwen-32b/status
+# Start all models
+curl -X POST http://localhost:8000/admin/models/start-all
+
+# Stop all models (except preloaded)
+curl -X POST http://localhost:8000/admin/models/stop-all
+
+# Restart all running models
+curl -X POST http://localhost:8000/admin/models/restart-all
 ```
+
+### Resource Group Management
+
+```bash
+# Get resource group status
+curl http://localhost:8000/admin/groups/status
+
+# Start all models in a resource group
+curl -X POST http://localhost:8000/admin/groups/production/start
+
+# Stop all models in a resource group
+curl -X POST http://localhost:8000/admin/groups/development/stop
+```
+
+### Queue Management
+
+```bash
+# Get queue status for all models
+curl http://localhost:8000/admin/queue/status
+
+# Get queue status for specific model
+curl http://localhost:8000/admin/queue/qwen-32b/status
+
+# Clear queue for specific model
+curl -X POST http://localhost:8000/admin/queue/qwen-32b/clear
+```
+
+### Configuration Management
+
+```bash
+# Get models configuration schema
+curl http://localhost:8000/admin/config/models/schema
+
+# List configuration backups
+curl http://localhost:8000/admin/config/models/backups
+
+# Create configuration backup
+curl -X POST "http://localhost:8000/admin/config/models/backup?description=manual-backup"
+
+# Restore from backup
+curl -X POST http://localhost:8000/admin/config/models/restore/models_20240101_120000
+
+# Validate current configuration
+curl http://localhost:8000/admin/config/validation/models
+```
+
+## 📊 Web Dashboard
+
+LLM Proxifier includes a comprehensive web dashboard for monitoring and managing your models:
+
+### Accessing the Dashboard
+
+```bash
+# Navigate to the dashboard in your browser
+http://localhost:8000/dashboard
+```
+
+### Dashboard Features
+
+- **Real-time Model Status**: Live monitoring of all model states and resource usage
+- **Priority Management**: Drag-and-drop interface for reordering model priorities  
+- **Resource Group Control**: Visual management of model groups with bulk operations
+- **Queue Monitoring**: Real-time queue depth and request tracking with clear queue functionality
+- **Configuration Editor**: In-browser YAML editor with syntax highlighting and validation
+- **Backup Management**: Create, restore, and manage configuration backups
+- **Bulk Operations**: Start/stop multiple models or entire resource groups
+- **Performance Metrics**: CPU, memory usage, and request statistics
+
+### Dashboard Screenshots
+
+The dashboard provides:
+- A clean, responsive interface that works on desktop and mobile
+- Real-time WebSocket updates for live status monitoring
+- Interactive charts and graphs for performance metrics
+- Confirmation dialogs for destructive operations
+- Syntax-highlighted configuration editing with live validation
 
 ## 🧪 Testing
 
@@ -216,6 +399,49 @@ llama-server --model ./path/to/model.gguf --port 11001 --ctx-size 4096
 1. **Resource limits**: Monitor CPU/memory usage with `/metrics`
 2. **Concurrent models**: Reduce `MAX_CONCURRENT_MODELS` if system is overloaded
 3. **Model size**: Consider using smaller quantized models
+
+### Queue and Priority Issues
+
+1. **Models not auto-starting**: Check `auto_start: true` in configuration
+2. **Priority not working**: Ensure priority values are between 1-10
+3. **Queue full errors**: Monitor queue depth with `/admin/queue/status`
+4. **Resource group conflicts**: Verify models are in correct groups
+
+```bash
+# Check queue status
+curl http://localhost:8000/admin/queue/status
+
+# Clear stuck queue
+curl -X POST http://localhost:8000/admin/queue/model-name/clear
+
+# Verify priority configuration
+curl http://localhost:8000/dashboard/api/models/priority
+```
+
+### Configuration Issues
+
+1. **Config not reloading**: Use hot-reload endpoints instead of restarting
+2. **Backup failures**: Check file permissions in config/backups directory
+3. **Validation errors**: Use validation endpoints before applying changes
+4. **Authentication problems**: Verify API keys in auth.yaml
+
+```bash
+# Validate configuration before applying
+curl http://localhost:8000/admin/config/validation/models
+
+# Create backup before changes
+curl -X POST "http://localhost:8000/admin/config/models/backup?description=before-changes"
+
+# Hot-reload specific model
+curl -X POST http://localhost:8000/admin/models/model-name/reload
+```
+
+### Dashboard Issues
+
+1. **Dashboard not loading**: Check if port 8000 is accessible
+2. **Real-time updates not working**: Verify WebSocket connection
+3. **Authentication required**: Check `dashboard_auth_required` in auth.yaml
+4. **Configuration editor errors**: Validate YAML syntax before saving
 
 ## 📊 Monitoring
 
