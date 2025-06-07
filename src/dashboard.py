@@ -2,11 +2,12 @@
 
 import logging
 from datetime import datetime
-from typing import Dict, Any
+from typing import Dict, Any, List
 
-from fastapi import APIRouter, Request, WebSocket, WebSocketDisconnect
-from fastapi.responses import HTMLResponse
+from fastapi import APIRouter, Request, WebSocket, WebSocketDisconnect, HTTPException
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
+from pydantic import BaseModel
 
 from src.utils import get_system_memory_usage, format_uptime
 
@@ -208,3 +209,291 @@ async def websocket_endpoint(websocket: WebSocket):
     except Exception as e:
         logger.error(f"WebSocket error: {e}")
         manager.disconnect(websocket)
+
+
+# Data models for new endpoints
+class PriorityUpdateModel(BaseModel):
+    model_priorities: Dict[str, int]
+
+
+class BulkOperationModel(BaseModel):
+    operation: str  # "start", "stop", "restart"
+    models: List[str] = []  # Empty list means all models
+    resource_group: str = None  # Optional resource group filter
+
+
+class ConfigUpdateModel(BaseModel):
+    config_data: Dict[str, Any]
+
+
+# Priority Management Endpoints
+@dashboard_router.get("/api/models/priority")
+async def get_models_by_priority():
+    """Get models sorted by priority."""
+    try:
+        from src.main import model_manager
+        if not model_manager:
+            raise HTTPException(status_code=503, detail="Model manager not available")
+        
+        models_by_priority = model_manager.get_models_by_priority()
+        return [
+            {
+                "name": config.name,
+                "priority": config.priority,
+                "resource_group": config.resource_group,
+                "auto_start": config.auto_start,
+                "preload": config.preload,
+                "status": model_manager.get_model_status(config.name)["status"]
+            }
+            for config in models_by_priority
+        ]
+    except Exception as e:
+        logger.error(f"Error getting models by priority: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@dashboard_router.post("/api/models/priority")
+async def update_model_priorities(priority_update: PriorityUpdateModel):
+    """Update model priorities."""
+    try:
+        from src.main import model_manager, config_manager
+        if not model_manager or not config_manager:
+            raise HTTPException(status_code=503, detail="Managers not available")
+        
+        # Update priorities in configurations
+        updated_models = []
+        for model_name, priority in priority_update.model_priorities.items():
+            if model_name in model_manager.configs:
+                old_priority = model_manager.configs[model_name].priority
+                model_manager.configs[model_name].priority = priority
+                updated_models.append({
+                    "name": model_name,
+                    "old_priority": old_priority,
+                    "new_priority": priority
+                })
+        
+        return {
+            "success": True,
+            "updated_models": updated_models,
+            "message": f"Updated priorities for {len(updated_models)} models"
+        }
+    except Exception as e:
+        logger.error(f"Error updating model priorities: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# Resource Group Management Endpoints
+@dashboard_router.get("/api/groups")
+async def get_resource_groups():
+    """Get resource group information."""
+    try:
+        from src.main import model_manager
+        if not model_manager:
+            raise HTTPException(status_code=503, detail="Model manager not available")
+        
+        return model_manager.get_resource_group_status()
+    except Exception as e:
+        logger.error(f"Error getting resource groups: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@dashboard_router.post("/api/groups/{resource_group}/start")
+async def start_resource_group(resource_group: str):
+    """Start all models in a resource group."""
+    try:
+        from src.main import model_manager
+        if not model_manager:
+            raise HTTPException(status_code=503, detail="Model manager not available")
+        
+        results = await model_manager.start_resource_group(resource_group)
+        return {
+            "success": True,
+            "resource_group": resource_group,
+            "results": results
+        }
+    except Exception as e:
+        logger.error(f"Error starting resource group {resource_group}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@dashboard_router.post("/api/groups/{resource_group}/stop")
+async def stop_resource_group(resource_group: str):
+    """Stop all models in a resource group."""
+    try:
+        from src.main import model_manager
+        if not model_manager:
+            raise HTTPException(status_code=503, detail="Model manager not available")
+        
+        results = await model_manager.stop_resource_group(resource_group)
+        return {
+            "success": True,
+            "resource_group": resource_group,
+            "results": results
+        }
+    except Exception as e:
+        logger.error(f"Error stopping resource group {resource_group}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# Queue Status Endpoints
+@dashboard_router.get("/api/queue/status")
+async def get_queue_status():
+    """Get queue status for dashboard."""
+    try:
+        from src.main import queue_manager
+        if not queue_manager:
+            raise HTTPException(status_code=503, detail="Queue manager not available")
+        
+        return queue_manager.get_queue_stats()
+    except Exception as e:
+        logger.error(f"Error getting queue status: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@dashboard_router.post("/api/queue/{model_name}/clear")
+async def clear_queue_dashboard(model_name: str):
+    """Clear queue for specific model (dashboard endpoint)."""
+    try:
+        from src.main import queue_manager
+        if not queue_manager:
+            raise HTTPException(status_code=503, detail="Queue manager not available")
+        
+        queue_manager.clear_model_queue(model_name)
+        return {
+            "success": True,
+            "message": f"Queue cleared for model {model_name}"
+        }
+    except Exception as e:
+        logger.error(f"Error clearing queue for {model_name}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# Bulk Operations Endpoints
+@dashboard_router.post("/api/models/bulk-action")
+async def bulk_model_operation(operation: BulkOperationModel):
+    """Handle bulk operations on models."""
+    try:
+        from src.main import model_manager
+        if not model_manager:
+            raise HTTPException(status_code=503, detail="Model manager not available")
+        
+        results = {}
+        
+        if operation.operation == "start":
+            if operation.resource_group:
+                results = await model_manager.start_resource_group(operation.resource_group)
+            elif operation.models:
+                for model_name in operation.models:
+                    instance = await model_manager.get_or_start_model(model_name)
+                    results[model_name] = instance is not None
+            else:
+                results = await model_manager.start_all_models()
+                
+        elif operation.operation == "stop":
+            if operation.resource_group:
+                results = await model_manager.stop_resource_group(operation.resource_group)
+            elif operation.models:
+                for model_name in operation.models:
+                    results[model_name] = await model_manager.stop_model(model_name)
+            else:
+                results = await model_manager.stop_all_models()
+                
+        elif operation.operation == "restart":
+            if operation.models:
+                for model_name in operation.models:
+                    await model_manager.stop_model(model_name)
+                    instance = await model_manager.get_or_start_model(model_name)
+                    results[model_name] = instance is not None
+            else:
+                results = await model_manager.restart_all_models()
+        else:
+            raise HTTPException(status_code=400, detail=f"Unknown operation: {operation.operation}")
+        
+        return {
+            "success": True,
+            "operation": operation.operation,
+            "results": results
+        }
+    except Exception as e:
+        logger.error(f"Error in bulk operation {operation.operation}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# Configuration Management Endpoints (Mock implementations for now)
+@dashboard_router.get("/api/config/models")
+async def get_models_config():
+    """Get current model configuration."""
+    try:
+        from src.main import config_manager
+        if not config_manager:
+            raise HTTPException(status_code=503, detail="Config manager not available")
+        
+        # Return a simplified version of the config for the dashboard
+        return {
+            "models": {
+                name: {
+                    "priority": getattr(config, 'priority', 5),
+                    "resource_group": getattr(config, 'resource_group', 'default'),
+                    "auto_start": getattr(config, 'auto_start', False),
+                    "preload": getattr(config, 'preload', False),
+                    "port": config.port,
+                    "model_path": config.model_path
+                }
+                for name, config in config_manager.model_configs.items()
+            }
+        }
+    except Exception as e:
+        logger.error(f"Error getting models config: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@dashboard_router.post("/api/config/models")
+async def update_models_config(config_update: ConfigUpdateModel):
+    """Update model configuration (placeholder implementation)."""
+    try:
+        # This would need a proper configuration management system
+        # For now, return a mock response
+        return {
+            "success": False,
+            "message": "Configuration updates not yet implemented - requires full config management system"
+        }
+    except Exception as e:
+        logger.error(f"Error updating models config: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@dashboard_router.get("/api/config/auth")
+async def get_auth_config():
+    """Get current auth configuration (sanitized)."""
+    try:
+        from src.main import config_manager
+        if not config_manager:
+            raise HTTPException(status_code=503, detail="Config manager not available")
+        
+        # Return sanitized auth config (no actual keys)
+        auth_config = config_manager.auth_config
+        return {
+            "enabled": auth_config.enabled,
+            "dashboard_auth_required": auth_config.dashboard_auth_required,
+            "api_key_count": len(auth_config.api_keys) if auth_config.api_keys else 0,
+            "rate_limits": auth_config.rate_limits,
+            "public_endpoints": auth_config.public_endpoints
+        }
+    except Exception as e:
+        logger.error(f"Error getting auth config: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@dashboard_router.post("/api/config/auth")
+async def update_auth_config(config_update: ConfigUpdateModel):
+    """Update auth configuration (placeholder implementation)."""
+    try:
+        # This would need a proper configuration management system
+        # For now, return a mock response
+        return {
+            "success": False,
+            "message": "Auth configuration updates not yet implemented - requires full config management system"
+        }
+    except Exception as e:
+        logger.error(f"Error updating auth config: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
