@@ -121,7 +121,16 @@ class ProxyHandler:
                     headers={"Retry-After": "60"}
                 )
         
-        # Normal request processing
+        # Normal request processing - model should be running
+        if not target_url:
+            raise HTTPException(
+                status_code=503,
+                detail=format_error_response(
+                    503, 
+                    f"Model {model_name} is not available", 
+                    "service_unavailable"
+                )
+            )
         return await self.forward_request(request, target_url, "/v1/chat/completions", model_name)
     
     async def handle_completions(self, request: Request, model_name: str, target_url: str) -> Any:
@@ -158,7 +167,16 @@ class ProxyHandler:
                     headers={"Retry-After": "60"}
                 )
         
-        # Normal request processing
+        # Normal request processing - model should be running
+        if not target_url:
+            raise HTTPException(
+                status_code=503,
+                detail=format_error_response(
+                    503, 
+                    f"Model {model_name} is not available", 
+                    "service_unavailable"
+                )
+            )
         return await self.forward_request(request, target_url, "/v1/completions", model_name)
     
     async def forward_request(self, request: Request, target_url: str, endpoint: str, model_name: str = None) -> Any:

@@ -13,6 +13,7 @@ from fastapi.staticfiles import StaticFiles
 from src.config import ConfigManager
 from src.model_manager import ModelManager
 from src.proxy_handler import ProxyHandler
+from src.queue_manager import QueueManager
 from src.dashboard import dashboard_router
 from src.auth import AuthManager
 from src.middleware import AuthenticationMiddleware, RateLimitMiddleware
@@ -24,12 +25,13 @@ model_manager: ModelManager = None
 proxy_handler: ProxyHandler = None
 config_manager: ConfigManager = None
 auth_manager: AuthManager = None
+queue_manager: QueueManager = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Manage application lifecycle."""
-    global model_manager, proxy_handler, config_manager, auth_manager
+    global model_manager, proxy_handler, config_manager, auth_manager, queue_manager
     
     # Startup
     logging.basicConfig(level=logging.INFO)
@@ -44,15 +46,19 @@ async def lifespan(app: FastAPI):
         model_configs = config_manager.load_model_configs()
         logger.info(f"Loaded {len(model_configs)} model configurations")
         
-        # Initialize model manager
+        # Initialize queue manager
+        queue_manager = QueueManager()
+        
+        # Initialize model manager with queue manager
         model_manager = ModelManager(
             timeout_minutes=proxy_config.timeout_minutes,
-            max_concurrent=proxy_config.max_concurrent_models
+            max_concurrent=proxy_config.max_concurrent_models,
+            queue_manager=queue_manager
         )
         model_manager.load_configs(model_configs)
         
-        # Initialize proxy handler
-        proxy_handler = ProxyHandler()
+        # Initialize proxy handler with queue manager
+        proxy_handler = ProxyHandler(queue_manager=queue_manager)
         
         # Initialize authentication manager
         auth_manager = AuthManager(config_manager)
@@ -61,8 +67,9 @@ async def lifespan(app: FastAPI):
         app.add_middleware(AuthenticationMiddleware, auth_manager=auth_manager)
         app.add_middleware(RateLimitMiddleware, auth_manager=auth_manager)
         
-        # Start cleanup task
+        # Start cleanup tasks
         await model_manager.start_cleanup_task()
+        await queue_manager.start_cleanup_task()
         
         # Start auto-start models
         await model_manager.start_all_auto_models()
@@ -80,6 +87,9 @@ async def lifespan(app: FastAPI):
     
     # Shutdown
     logger.info("Shutting down LLM Proxy Server")
+    
+    if queue_manager:
+        await queue_manager.shutdown()
     
     if model_manager:
         await model_manager.shutdown_all()
@@ -138,9 +148,8 @@ async def chat_completions(request: Request):
                 detail=format_error_response(400, "Missing or invalid model name", "invalid_request")
             )
         
-        # Get or start the model
-        model_instance = await model_manager.get_or_start_model(model_name)
-        if not model_instance:
+        # Check if model is configured
+        if model_name not in config_manager.model_configs:
             available_models = list(config_manager.model_configs.keys())
             raise HTTPException(
                 status_code=400,
@@ -151,8 +160,14 @@ async def chat_completions(request: Request):
                 )
             )
         
+        # Use the proxy handler which will handle queueing if needed
+        model_instance = await model_manager.get_or_start_model(model_name)
+        if not model_instance:
+            # Model failed to start, but proxy handler will handle queueing
+            return await proxy_handler.handle_chat_completions(request, model_name, None)
+        
         # Forward the request
-        return await proxy_handler.handle_chat_completions(request, model_instance.api_url)
+        return await proxy_handler.handle_chat_completions(request, model_name, model_instance.api_url)
         
     except HTTPException:
         raise
@@ -176,9 +191,8 @@ async def completions(request: Request):
                 detail=format_error_response(400, "Missing or invalid model name", "invalid_request")
             )
         
-        # Get or start the model
-        model_instance = await model_manager.get_or_start_model(model_name)
-        if not model_instance:
+        # Check if model is configured
+        if model_name not in config_manager.model_configs:
             available_models = list(config_manager.model_configs.keys())
             raise HTTPException(
                 status_code=400,
@@ -189,8 +203,14 @@ async def completions(request: Request):
                 )
             )
         
+        # Use the proxy handler which will handle queueing if needed
+        model_instance = await model_manager.get_or_start_model(model_name)
+        if not model_instance:
+            # Model failed to start, but proxy handler will handle queueing
+            return await proxy_handler.handle_completions(request, model_name, None)
+        
         # Forward the request
-        return await proxy_handler.handle_completions(request, model_instance.api_url)
+        return await proxy_handler.handle_completions(request, model_name, model_instance.api_url)
         
     except HTTPException:
         raise
@@ -496,6 +516,46 @@ async def reload_model(model_name: str):
         raise
     except Exception as e:
         logging.error(f"Error reloading model {model_name}: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=format_error_response(500, str(e), "internal_error")
+        )
+
+
+@app.get("/admin/queue/status")
+async def get_all_queue_status():
+    """Get queue statistics for all models."""
+    try:
+        return queue_manager.get_queue_stats()
+    except Exception as e:
+        logging.error(f"Error getting queue status: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=format_error_response(500, str(e), "internal_error")
+        )
+
+
+@app.get("/admin/queue/{model_name}/status")
+async def get_model_queue_status(model_name: str):
+    """Get queue status for specific model."""
+    try:
+        return queue_manager.get_queue_stats(model_name)
+    except Exception as e:
+        logging.error(f"Error getting queue status for {model_name}: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=format_error_response(500, str(e), "internal_error")
+        )
+
+
+@app.post("/admin/queue/{model_name}/clear")
+async def clear_model_queue(model_name: str):
+    """Clear queue for specific model."""
+    try:
+        queue_manager.clear_model_queue(model_name)
+        return {"message": f"Queue cleared for model {model_name}"}
+    except Exception as e:
+        logging.error(f"Error clearing queue for {model_name}: {e}")
         raise HTTPException(
             status_code=500,
             detail=format_error_response(500, str(e), "internal_error")
