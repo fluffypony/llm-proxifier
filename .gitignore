@@ -65,3 +65,4 @@ test_imports.py
 .coverage
 htmlcov/
 .pytest_cache/
+.pypirc
