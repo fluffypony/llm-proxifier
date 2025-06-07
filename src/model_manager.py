@@ -9,6 +9,7 @@ import subprocess
 from dataclasses import dataclass
 
 from src.config import ModelConfig
+from src.queue_manager import QueueManager, ModelState
 from src.utils import (
     format_llama_cpp_command,
     wait_for_server,
@@ -39,14 +40,21 @@ class ModelInstance:
         """Get the API base URL for this model."""
         return f"http://127.0.0.1:{self.config.port}"
     
-    async def start(self) -> bool:
+    async def start(self, queue_manager: QueueManager = None) -> bool:
         """Start the model server process."""
+        if queue_manager:
+            queue_manager.set_model_state(self.config.name, ModelState.STARTING)
+            
         if self.process and self.process.poll() is None:
             logging.warning(f"Model {self.config.name} is already running")
+            if queue_manager:
+                queue_manager.set_model_state(self.config.name, ModelState.RUNNING)
             return True
         
         if is_port_listening(self.config.port):
             logging.error(f"Port {self.config.port} is already in use")
+            if queue_manager:
+                queue_manager.set_model_state(self.config.name, ModelState.STOPPED)
             return False
         
         try:
@@ -70,21 +78,32 @@ class ModelInstance:
             if server_ready and self.process.poll() is None:
                 self.is_ready = True
                 self.update_access_time()
+                if queue_manager:
+                    queue_manager.set_model_state(self.config.name, ModelState.RUNNING)
                 logging.info(f"Model {self.config.name} started successfully on port {self.config.port}")
                 return True
             else:
                 logging.error(f"Model {self.config.name} failed to start or health check failed")
+                if queue_manager:
+                    queue_manager.set_model_state(self.config.name, ModelState.STOPPED)
                 await self.stop()
                 return False
                 
         except Exception as e:
             logging.error(f"Error starting model {self.config.name}: {e}")
+            if queue_manager:
+                queue_manager.set_model_state(self.config.name, ModelState.STOPPED)
             await self.stop()
             return False
     
-    async def stop(self) -> bool:
+    async def stop(self, queue_manager: QueueManager = None) -> bool:
         """Stop the model server process."""
+        if queue_manager:
+            queue_manager.set_model_state(self.config.name, ModelState.STOPPING)
+            
         if not self.process:
+            if queue_manager:
+                queue_manager.set_model_state(self.config.name, ModelState.STOPPED)
             return True
         
         try:
@@ -100,10 +119,14 @@ class ModelInstance:
             
             self.process = None
             self.is_ready = False
+            if queue_manager:
+                queue_manager.set_model_state(self.config.name, ModelState.STOPPED)
             return True
             
         except Exception as e:
             logging.error(f"Error stopping model {self.config.name}: {e}")
+            if queue_manager:
+                queue_manager.set_model_state(self.config.name, ModelState.STOPPED)
             return False
     
     async def health_check(self) -> bool:
@@ -150,11 +173,12 @@ class ModelInstance:
 class ModelManager:
     """Manages multiple model instances with lifecycle control."""
     
-    def __init__(self, timeout_minutes: int = 2, max_concurrent: int = 4):
+    def __init__(self, timeout_minutes: int = 2, max_concurrent: int = 4, queue_manager: QueueManager = None):
         self.models: Dict[str, ModelInstance] = {}
         self.configs: Dict[str, ModelConfig] = {}
         self.timeout_minutes = timeout_minutes
         self.max_concurrent = max_concurrent
+        self.queue_manager = queue_manager
         self.cleanup_task: Optional[asyncio.Task] = None
         self.lock = asyncio.Lock()
         self.logger = logging.getLogger(__name__)
@@ -193,7 +217,7 @@ class ModelManager:
             config = self.configs[model_name]
             instance = ModelInstance(config=config)
             
-            if await instance.start():
+            if await instance.start(self.queue_manager):
                 self.models[model_name] = instance
                 return instance
             else:
@@ -206,7 +230,7 @@ class ModelManager:
                 return True
             
             instance = self.models[model_name]
-            success = await instance.stop()
+            success = await instance.stop(self.queue_manager)
             del self.models[model_name]
             return success
     
@@ -232,7 +256,7 @@ class ModelManager:
                     
                     for name in models_to_stop:
                         self.logger.info(f"Stopping inactive model: {name}")
-                        await self.models[name].stop()
+                        await self.models[name].stop(self.queue_manager)
                         del self.models[name]
                         
             except Exception as e:
@@ -491,13 +515,19 @@ class ModelManager:
             if model_name not in self.configs and not new_config:
                 return {"success": False, "error": f"Model {model_name} not configured"}
             
+            # Set model state to reloading
+            if self.queue_manager:
+                self.queue_manager.set_model_state(model_name, ModelState.RELOADING)
+                # Clear any queued requests for this model
+                self.queue_manager.clear_model_queue(model_name)
+            
             # Use new config if provided, otherwise use current config
             config = new_config or self.configs[model_name]
             was_running = model_name in self.models and self.models[model_name].is_ready
             
             # Stop existing model if running
             if model_name in self.models:
-                await self.models[model_name].stop()
+                await self.models[model_name].stop(self.queue_manager)
                 del self.models[model_name]
             
             # Update config if new one provided
@@ -507,7 +537,7 @@ class ModelManager:
             # Start with new configuration if it was running before
             if was_running:
                 instance = ModelInstance(config=config)
-                if await instance.start():
+                if await instance.start(self.queue_manager):
                     self.models[model_name] = instance
                     return {
                         "success": True,
@@ -515,11 +545,15 @@ class ModelManager:
                         "status": "running"
                     }
                 else:
+                    if self.queue_manager:
+                        self.queue_manager.set_model_state(model_name, ModelState.STOPPED)
                     return {
                         "success": False,
                         "error": f"Failed to start model {model_name} after reload"
                     }
             else:
+                if self.queue_manager:
+                    self.queue_manager.set_model_state(model_name, ModelState.STOPPED)
                 return {
                     "success": True,
                     "message": f"Model {model_name} configuration updated (not running)",
@@ -556,7 +590,7 @@ class ModelManager:
         async with self.lock:
             tasks = []
             for instance in self.models.values():
-                tasks.append(instance.stop())
+                tasks.append(instance.stop(self.queue_manager))
             
             if tasks:
                 await asyncio.gather(*tasks, return_exceptions=True)
