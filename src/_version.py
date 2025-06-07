@@ -16,7 +16,7 @@ def get_version() -> str:
         pass
     
     # Fallback to static version
-    return "1.8.0-dev"
+    return "1.8.0"
 
 
 def _get_git_version() -> Optional[str]:
@@ -48,15 +48,24 @@ def _get_git_version() -> Optional[str]:
             if version.startswith('v'):
                 version = version[1:]  # Remove 'v' prefix
             
+            # If it's just a commit hash (no tags), use fallback
+            if len(version) == 7 or (len(version) > 7 and all(c in '0123456789abcdef' for c in version)):
+                return None  # Fall back to static version
+            
             # Handle dirty working directory
             if version.endswith('-dirty'):
-                version = version[:-6] + '-dev-dirty'
+                # If it's a tag with dirty suffix, clean it up properly  
+                clean_version = version[:-6]
+                if clean_version and not all(c in '0123456789abcdef' for c in clean_version):
+                    return clean_version + ".dev0"
+                else:
+                    return None  # Fall back to static version
             elif '-g' in version:
                 # Format: tag-commits-ghash
                 parts = version.split('-')
                 if len(parts) >= 3:
                     tag, commits, ghash = parts[0], parts[1], parts[2]
-                    version = f"{tag}-dev+{commits}.{ghash}"
+                    return f"{tag}.dev{commits}"
             
             return version
         
