@@ -2,6 +2,7 @@
 
 import json
 import logging
+import time
 import uuid
 from typing import Dict, Any, Optional, AsyncGenerator
 import httpx
@@ -181,6 +182,9 @@ class ProxyHandler:
     
     async def forward_request(self, request: Request, target_url: str, endpoint: str, model_name: str = None) -> Any:
         """Forward request to the target model server."""
+        start_time = time.time()
+        success = False
+        
         try:
             # Get original request body
             body = await request.body()
@@ -203,12 +207,17 @@ class ProxyHandler:
                 params=dict(request.query_params)
             )
             
+            # Track success if we get a response
+            success = 200 <= response.status_code < 400
+            
             # Check if this is a streaming response
             content_type = response.headers.get('content-type', '')
             if 'text/event-stream' in content_type or 'stream' in str(dict(request.query_params)):
-                return await self._handle_streaming_response(response)
+                result = await self._handle_streaming_response(response)
             else:
-                return await self._handle_regular_response(response, model_name)
+                result = await self._handle_regular_response(response, model_name)
+            
+            return result
                 
         except httpx.RequestError as e:
             self.logger.error(f"Request error when forwarding to {target_url}: {e}")
@@ -228,6 +237,21 @@ class ProxyHandler:
                 status_code=500,
                 detail=format_error_response(500, f"Internal server error: {str(e)}", "internal_error")
             )
+        finally:
+            # Track metrics for this request
+            if model_name and self.queue_manager:
+                processing_time = time.time() - start_time
+                wait_time = 0.0  # TODO: track actual wait time from queue
+                
+                try:
+                    await self.queue_manager.track_request_metrics(
+                        model_name=model_name,
+                        wait_time=wait_time,
+                        processing_time=processing_time,
+                        success=success
+                    )
+                except Exception as e:
+                    self.logger.error(f"Error tracking metrics for {model_name}: {e}")
     
     async def _handle_streaming_response(self, response: httpx.Response) -> StreamingResponse:
         """Handle streaming server-sent events response."""
@@ -294,14 +318,6 @@ class ProxyHandler:
             return format_error_response(error.status_code, str(error.detail), "http_error")
         else:
             return format_error_response(status_code, str(error), "unknown_error")
-    
-    async def handle_chat_completions(self, request: Request, target_url: str) -> Any:
-        """Handle /v1/chat/completions endpoint."""
-        return await self.forward_request(request, target_url, "/v1/chat/completions")
-    
-    async def handle_completions(self, request: Request, target_url: str) -> Any:
-        """Handle /v1/completions endpoint."""
-        return await self.forward_request(request, target_url, "/v1/completions")
     
     async def handle_models(self, request: Request, target_url: str) -> Any:
         """Handle /v1/models endpoint."""
