@@ -2,14 +2,14 @@
 
 import logging
 from datetime import datetime
-from typing import Dict, Any, List
+from typing import Any, Dict, List
 
-from fastapi import APIRouter, Request, WebSocket, WebSocketDisconnect, HTTPException
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi import APIRouter, HTTPException, Request, WebSocket, WebSocketDisconnect
+from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 
-from llm_proxifier.utils import get_system_memory_usage, format_uptime
+from llm_proxifier.utils import format_uptime, get_system_memory_usage
 
 logger = logging.getLogger(__name__)
 
@@ -22,18 +22,18 @@ dashboard_router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
 class ConnectionManager:
     """Manage WebSocket connections for real-time updates."""
-    
+
     def __init__(self):
         self.active_connections: list[WebSocket] = []
-    
+
     async def connect(self, websocket: WebSocket):
         await websocket.accept()
         self.active_connections.append(websocket)
-    
+
     def disconnect(self, websocket: WebSocket):
         if websocket in self.active_connections:
             self.active_connections.remove(websocket)
-    
+
     async def broadcast_json(self, data: dict):
         """Broadcast JSON data to all connected clients."""
         disconnected = []
@@ -42,7 +42,7 @@ class ConnectionManager:
                 await connection.send_json(data)
             except:
                 disconnected.append(connection)
-        
+
         # Remove disconnected clients
         for conn in disconnected:
             self.disconnect(conn)
@@ -61,26 +61,26 @@ async def dashboard_home(request: Request):
 @dashboard_router.get("/api/status")
 async def get_dashboard_status():
     """Get current system and model status for dashboard."""
-    from llm_proxifier.main import model_manager, config_manager
-    
+    from llm_proxifier.main import config_manager, model_manager
+
     try:
         # Get model status
         model_status = model_manager.get_all_model_status()
-        
+
         # Get system info
         system_memory = get_system_memory_usage()
-        
+
         # Count active models
         active_models = sum(1 for status in model_status.values() if status.get("status") == "running")
         total_models = len(model_status)
-        
+
         # Calculate total memory usage
         total_memory_mb = sum(
-            status.get("memory_usage_mb", 0) 
-            for status in model_status.values() 
+            status.get("memory_usage_mb", 0)
+            for status in model_status.values()
             if status.get("status") == "running"
         )
-        
+
         response = {
             "timestamp": datetime.utcnow().isoformat(),
             "system": {
@@ -91,7 +91,7 @@ async def get_dashboard_status():
             },
             "models": {}
         }
-        
+
         # Format model data for dashboard
         for model_name, status in model_status.items():
             config = config_manager.model_configs.get(model_name, {})
@@ -108,9 +108,9 @@ async def get_dashboard_status():
                 "context_length": config.get("context_length", "N/A"),
                 "gpu_layers": config.get("gpu_layers", "N/A")
             }
-        
+
         return response
-        
+
     except Exception as e:
         logger.error(f"Error getting dashboard status: {e}")
         return {
@@ -123,15 +123,15 @@ async def get_dashboard_status():
 async def get_dashboard_metrics():
     """Get detailed metrics for dashboard charts."""
     from llm_proxifier.main import model_manager
-    
+
     try:
         model_status = model_manager.get_all_model_status()
-        
+
         metrics = {
             "timestamp": datetime.utcnow().isoformat(),
             "models": []
         }
-        
+
         for model_name, status in model_status.items():
             if status.get("status") == "running":
                 metrics["models"].append({
@@ -141,9 +141,9 @@ async def get_dashboard_metrics():
                     "request_count": status.get("request_count", 0),
                     "uptime_seconds": status.get("uptime", 0)
                 })
-        
+
         return metrics
-        
+
     except Exception as e:
         logger.error(f"Error getting dashboard metrics: {e}")
         return {"error": str(e)}
@@ -153,18 +153,18 @@ async def get_dashboard_metrics():
 async def dashboard_start_model(model_name: str):
     """Start a model via dashboard."""
     from llm_proxifier.main import model_manager
-    
+
     try:
         model_instance = await model_manager.get_or_start_model(model_name)
         if not model_instance:
             return {"success": False, "message": f"Failed to start model '{model_name}'"}
-        
+
         # Broadcast update to connected clients
         status_data = await get_dashboard_status()
         await manager.broadcast_json({"type": "status_update", "data": status_data})
-        
+
         return {"success": True, "message": f"Model '{model_name}' started successfully"}
-        
+
     except Exception as e:
         logger.error(f"Error starting model {model_name}: {e}")
         return {"success": False, "message": str(e)}
@@ -174,18 +174,18 @@ async def dashboard_start_model(model_name: str):
 async def dashboard_stop_model(model_name: str):
     """Stop a model via dashboard."""
     from llm_proxifier.main import model_manager
-    
+
     try:
         success = await model_manager.stop_model(model_name)
         if not success:
             return {"success": False, "message": f"Failed to stop model '{model_name}'"}
-        
+
         # Broadcast update to connected clients
         status_data = await get_dashboard_status()
         await manager.broadcast_json({"type": "status_update", "data": status_data})
-        
+
         return {"success": True, "message": f"Model '{model_name}' stopped successfully"}
-        
+
     except Exception as e:
         logger.error(f"Error stopping model {model_name}: {e}")
         return {"success": False, "message": str(e)}
@@ -199,11 +199,11 @@ async def websocket_endpoint(websocket: WebSocket):
         while True:
             # Wait for client messages (ping/keepalive)
             await websocket.receive_text()
-            
+
             # Send current status
             status_data = await get_dashboard_status()
             await websocket.send_json({"type": "status_update", "data": status_data})
-            
+
     except WebSocketDisconnect:
         manager.disconnect(websocket)
     except Exception as e:
@@ -235,7 +235,7 @@ async def get_models_by_priority():
         from llm_proxifier.main import model_manager
         if not model_manager:
             raise HTTPException(status_code=503, detail="Model manager not available")
-        
+
         models_by_priority = model_manager.get_models_by_priority()
         return [
             {
@@ -257,10 +257,10 @@ async def get_models_by_priority():
 async def update_model_priorities(priority_update: PriorityUpdateModel):
     """Update model priorities."""
     try:
-        from llm_proxifier.main import model_manager, config_manager
+        from llm_proxifier.main import config_manager, model_manager
         if not model_manager or not config_manager:
             raise HTTPException(status_code=503, detail="Managers not available")
-        
+
         # Update priorities in configurations
         updated_models = []
         for model_name, priority in priority_update.model_priorities.items():
@@ -272,7 +272,7 @@ async def update_model_priorities(priority_update: PriorityUpdateModel):
                     "old_priority": old_priority,
                     "new_priority": priority
                 })
-        
+
         return {
             "success": True,
             "updated_models": updated_models,
@@ -291,7 +291,7 @@ async def get_resource_groups():
         from llm_proxifier.main import model_manager
         if not model_manager:
             raise HTTPException(status_code=503, detail="Model manager not available")
-        
+
         return model_manager.get_resource_group_status()
     except Exception as e:
         logger.error(f"Error getting resource groups: {e}")
@@ -305,7 +305,7 @@ async def start_resource_group(resource_group: str):
         from llm_proxifier.main import model_manager
         if not model_manager:
             raise HTTPException(status_code=503, detail="Model manager not available")
-        
+
         results = await model_manager.start_resource_group(resource_group)
         return {
             "success": True,
@@ -324,7 +324,7 @@ async def stop_resource_group(resource_group: str):
         from llm_proxifier.main import model_manager
         if not model_manager:
             raise HTTPException(status_code=503, detail="Model manager not available")
-        
+
         results = await model_manager.stop_resource_group(resource_group)
         return {
             "success": True,
@@ -344,7 +344,7 @@ async def get_queue_status():
         from llm_proxifier.main import queue_manager
         if not queue_manager:
             raise HTTPException(status_code=503, detail="Queue manager not available")
-        
+
         return queue_manager.get_queue_stats()
     except Exception as e:
         logger.error(f"Error getting queue status: {e}")
@@ -358,7 +358,7 @@ async def clear_queue_dashboard(model_name: str):
         from llm_proxifier.main import queue_manager
         if not queue_manager:
             raise HTTPException(status_code=503, detail="Queue manager not available")
-        
+
         queue_manager.clear_model_queue(model_name)
         return {
             "success": True,
@@ -377,9 +377,9 @@ async def bulk_model_operation(operation: BulkOperationModel):
         from llm_proxifier.main import model_manager
         if not model_manager:
             raise HTTPException(status_code=503, detail="Model manager not available")
-        
+
         results = {}
-        
+
         if operation.operation == "start":
             if operation.resource_group:
                 results = await model_manager.start_resource_group(operation.resource_group)
@@ -389,7 +389,7 @@ async def bulk_model_operation(operation: BulkOperationModel):
                     results[model_name] = instance is not None
             else:
                 results = await model_manager.start_all_models()
-                
+
         elif operation.operation == "stop":
             if operation.resource_group:
                 results = await model_manager.stop_resource_group(operation.resource_group)
@@ -398,7 +398,7 @@ async def bulk_model_operation(operation: BulkOperationModel):
                     results[model_name] = await model_manager.stop_model(model_name)
             else:
                 results = await model_manager.stop_all_models()
-                
+
         elif operation.operation == "restart":
             if operation.models:
                 for model_name in operation.models:
@@ -409,7 +409,7 @@ async def bulk_model_operation(operation: BulkOperationModel):
                 results = await model_manager.restart_all_models()
         else:
             raise HTTPException(status_code=400, detail=f"Unknown operation: {operation.operation}")
-        
+
         return {
             "success": True,
             "operation": operation.operation,
@@ -428,7 +428,7 @@ async def get_models_config():
         from llm_proxifier.main import config_manager
         if not config_manager:
             raise HTTPException(status_code=503, detail="Config manager not available")
-        
+
         # Return a simplified version of the config for the dashboard
         return {
             "models": {
@@ -452,19 +452,19 @@ async def get_models_config():
 async def update_models_config(config_update: ConfigUpdateModel):
     """Update model configuration using ConfigurationManager."""
     try:
-        from llm_proxifier.main import configuration_manager, model_manager, config_manager
+        from llm_proxifier.main import config_manager, configuration_manager, model_manager
         if not configuration_manager:
             raise HTTPException(status_code=503, detail="Configuration manager not available")
-        
+
         # Save configuration with backup
         result = configuration_manager.save_models_config(config_update.config_data, backup=True)
-        
+
         if result["success"]:
             # Reload application configuration
             try:
                 new_configs = config_manager.load_model_configs()
                 model_manager.load_configs(new_configs)
-                
+
                 # Broadcast configuration change via WebSocket
                 await manager.broadcast_json({
                     "type": "config_updated",
@@ -472,12 +472,12 @@ async def update_models_config(config_update: ConfigUpdateModel):
                     "timestamp": datetime.utcnow().isoformat(),
                     "backup_id": result.get("backup_created")
                 })
-                
+
             except Exception as reload_error:
                 logger.error(f"Error reloading config after save: {reload_error}")
                 result["warnings"] = result.get("warnings", [])
                 result["warnings"].append(f"Configuration saved but reload failed: {reload_error}")
-        
+
         return result
     except Exception as e:
         logger.error(f"Error updating models config: {e}")
@@ -491,7 +491,7 @@ async def get_auth_config():
         from llm_proxifier.main import config_manager
         if not config_manager:
             raise HTTPException(status_code=503, detail="Config manager not available")
-        
+
         # Return sanitized auth config (no actual keys)
         auth_config = config_manager.auth_config
         return {
@@ -510,18 +510,18 @@ async def get_auth_config():
 async def update_auth_config(config_update: ConfigUpdateModel):
     """Update auth configuration using ConfigurationManager."""
     try:
-        from llm_proxifier.main import configuration_manager, config_manager
+        from llm_proxifier.main import config_manager, configuration_manager
         if not configuration_manager:
             raise HTTPException(status_code=503, detail="Configuration manager not available")
-        
+
         # Save configuration with backup
         result = configuration_manager.save_auth_config(config_update.config_data, backup=True)
-        
+
         if result["success"]:
             # Reload application configuration
             try:
                 config_manager.auth_config = config_manager._load_auth_config()
-                
+
                 # Broadcast configuration change via WebSocket
                 await manager.broadcast_json({
                     "type": "config_updated",
@@ -529,12 +529,12 @@ async def update_auth_config(config_update: ConfigUpdateModel):
                     "timestamp": datetime.utcnow().isoformat(),
                     "backup_id": result.get("backup_created")
                 })
-                
+
             except Exception as reload_error:
                 logger.error(f"Error reloading auth config after save: {reload_error}")
                 result["warnings"] = result.get("warnings", [])
                 result["warnings"].append(f"Configuration saved but reload failed: {reload_error}")
-        
+
         return result
     except Exception as e:
         logger.error(f"Error updating auth config: {e}")
@@ -549,9 +549,9 @@ async def list_config_backups(config_type: str = None):
         from llm_proxifier.main import configuration_manager
         if not configuration_manager:
             raise HTTPException(status_code=503, detail="Configuration manager not available")
-        
+
         backups = configuration_manager.list_backups(config_type)
-        
+
         return {
             "backups": [
                 {
@@ -576,9 +576,9 @@ async def create_config_backup(config_type: str, description: str = "Manual back
         from llm_proxifier.main import configuration_manager
         if not configuration_manager:
             raise HTTPException(status_code=503, detail="Configuration manager not available")
-        
+
         result = configuration_manager.backup_config(config_type, description)
-        
+
         if result["success"]:
             # Broadcast backup creation via WebSocket
             await manager.broadcast_json({
@@ -587,7 +587,7 @@ async def create_config_backup(config_type: str, description: str = "Manual back
                 "backup_id": result["backup_id"],
                 "timestamp": datetime.utcnow().isoformat()
             })
-        
+
         return result
     except Exception as e:
         logger.error(f"Error creating backup: {e}")
@@ -598,12 +598,12 @@ async def create_config_backup(config_type: str, description: str = "Manual back
 async def restore_config_backup(config_type: str, backup_id: str):
     """Restore configuration from backup."""
     try:
-        from llm_proxifier.main import configuration_manager, model_manager, config_manager
+        from llm_proxifier.main import config_manager, configuration_manager, model_manager
         if not configuration_manager:
             raise HTTPException(status_code=503, detail="Configuration manager not available")
-        
+
         result = configuration_manager.restore_config(config_type, backup_id)
-        
+
         if result["success"]:
             # Reload application configuration
             try:
@@ -612,7 +612,7 @@ async def restore_config_backup(config_type: str, backup_id: str):
                     model_manager.load_configs(new_configs)
                 elif config_type == "auth":
                     config_manager.auth_config = config_manager._load_auth_config()
-                
+
                 # Broadcast restore event via WebSocket
                 await manager.broadcast_json({
                     "type": "config_restored",
@@ -620,12 +620,12 @@ async def restore_config_backup(config_type: str, backup_id: str):
                     "backup_id": backup_id,
                     "timestamp": datetime.utcnow().isoformat()
                 })
-                
+
             except Exception as reload_error:
                 logger.error(f"Error reloading config after restore: {reload_error}")
                 result["warnings"] = result.get("warnings", [])
                 result["warnings"].append(f"Configuration restored but reload failed: {reload_error}")
-        
+
         return result
     except Exception as e:
         logger.error(f"Error restoring backup: {e}")
@@ -639,38 +639,38 @@ async def preview_config_changes(config_update: ConfigUpdateModel):
         from llm_proxifier.main import configuration_manager
         if not configuration_manager:
             raise HTTPException(status_code=503, detail="Configuration manager not available")
-        
+
         config_type = config_update.config_type
         new_config = config_update.config_data
-        
+
         # Load current configuration
         if config_type == "models":
             current_config = configuration_manager.load_models_config()
         else:
             current_config = configuration_manager.load_auth_config()
-        
+
         # Validate new configuration
         validation_result = configuration_manager.validate_config(new_config, config_type)
-        
+
         # Generate simple diff information
         changes = []
         if config_type == "models" and "models" in new_config and "models" in current_config:
             current_models = set(current_config["models"].keys())
             new_models = set(new_config["models"].keys())
-            
+
             # Added models
             for model in new_models - current_models:
                 changes.append(f"Added model: {model}")
-            
+
             # Removed models
             for model in current_models - new_models:
                 changes.append(f"Removed model: {model}")
-            
+
             # Modified models
             for model in new_models & current_models:
                 if new_config["models"][model] != current_config["models"][model]:
                     changes.append(f"Modified model: {model}")
-        
+
         return {
             "validation": validation_result,
             "changes": changes,
@@ -687,14 +687,14 @@ async def health_check():
     """Simple health check endpoint for connection monitoring."""
     try:
         from llm_proxifier.main import queue_manager
-        
+
         health_status = {
             "status": "healthy",
             "timestamp": datetime.now().isoformat(),
             "queue_manager_available": queue_manager is not None,
             "version": "1.0.0"
         }
-        
+
         # Basic queue manager connectivity test
         if queue_manager:
             try:
@@ -705,7 +705,7 @@ async def health_check():
             except Exception as e:
                 health_status["queue_manager_responsive"] = False
                 health_status["queue_manager_error"] = str(e)
-        
+
         return health_status
     except Exception as e:
         logger.error(f"Health check failed: {e}")
@@ -720,10 +720,10 @@ async def get_queue_status():
         from llm_proxifier.main import queue_manager
         if not queue_manager:
             raise HTTPException(status_code=503, detail="Queue manager not available")
-        
+
         # Get queue statistics from enhanced queue manager
         queue_stats = queue_manager.get_queue_stats()
-        
+
         return queue_stats
     except Exception as e:
         logger.error(f"Error getting queue status: {e}")
@@ -737,10 +737,10 @@ async def get_queue_history(model_name: str = None, limit: int = 50):
         from llm_proxifier.main import queue_manager
         if not queue_manager:
             raise HTTPException(status_code=503, detail="Queue manager not available")
-        
+
         # Get historical metrics from enhanced queue manager
         historical_data = queue_manager.get_historical_metrics(model_name, limit)
-        
+
         return {
             "historical_data": historical_data,
             "timestamp": datetime.utcnow().isoformat()
@@ -757,17 +757,17 @@ async def clear_model_queue(model_name: str):
         from llm_proxifier.main import queue_manager
         if not queue_manager:
             raise HTTPException(status_code=503, detail="Queue manager not available")
-        
+
         # Clear the queue for the model
         queue_manager.clear_model_queue(model_name)
-        
+
         # Broadcast queue clear event via WebSocket
         await manager.broadcast_json({
             "type": "queue_cleared",
             "model_name": model_name,
             "timestamp": datetime.utcnow().isoformat()
         })
-        
+
         return {
             "success": True,
             "message": f"Queue cleared for model {model_name}"
@@ -784,17 +784,17 @@ async def reset_queue_metrics(model_name: str = None):
         from llm_proxifier.main import queue_manager
         if not queue_manager:
             raise HTTPException(status_code=503, detail="Queue manager not available")
-        
+
         # Reset metrics
         queue_manager.reset_metrics(model_name)
-        
+
         # Broadcast metrics reset event via WebSocket
         await manager.broadcast_json({
             "type": "metrics_reset",
             "model_name": model_name or "all",
             "timestamp": datetime.utcnow().isoformat()
         })
-        
+
         return {
             "success": True,
             "message": f"Metrics reset for {model_name or 'all models'}"

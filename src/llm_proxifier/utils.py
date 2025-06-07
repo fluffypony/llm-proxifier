@@ -1,13 +1,15 @@
 """Utility functions for the LLM proxy server."""
 
-import socket
-import time
 import asyncio
-import subprocess
-import psutil
 import json
-from typing import List, Optional, AsyncGenerator, Dict, Any
+import socket
+import subprocess
+import time
+from typing import Any, AsyncGenerator, Dict, List, Optional
+
 import httpx
+import psutil
+
 from llm_proxifier.config import ModelConfig
 
 
@@ -17,7 +19,7 @@ def is_port_open(port: int, host: str = "127.0.0.1") -> bool:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             s.bind((host, port))
             return True
-    except socket.error:
+    except OSError:
         return False
 
 
@@ -28,14 +30,14 @@ def is_port_listening(port: int, host: str = "127.0.0.1") -> bool:
             s.settimeout(1)
             result = s.connect_ex((host, port))
             return result == 0
-    except socket.error:
+    except OSError:
         return False
 
 
 async def wait_for_server(url: str, timeout: int = 60) -> bool:
     """Wait for a server to respond to health checks."""
     start_time = time.time()
-    
+
     async with httpx.AsyncClient() as client:
         while time.time() - start_time < timeout:
             try:
@@ -44,9 +46,9 @@ async def wait_for_server(url: str, timeout: int = 60) -> bool:
                     return True
             except (httpx.RequestError, httpx.TimeoutException):
                 pass
-            
+
             await asyncio.sleep(1)
-    
+
     return False
 
 
@@ -61,10 +63,10 @@ def format_llama_cpp_command(config: ModelConfig) -> List[str]:
         "--chat-template", config.chat_format,
         "--host", "127.0.0.1"
     ]
-    
+
     # Add additional arguments
     cmd.extend(config.additional_args)
-    
+
     return cmd
 
 
@@ -73,10 +75,10 @@ async def parse_sse_stream(response: httpx.Response) -> AsyncGenerator[Dict[str,
     async for line in response.aiter_lines():
         if line.startswith("data: "):
             data = line[6:]  # Remove "data: " prefix
-            
+
             if data.strip() == "[DONE]":
                 break
-            
+
             try:
                 yield json.loads(data)
             except json.JSONDecodeError:
@@ -107,7 +109,7 @@ async def graceful_shutdown(process: subprocess.Popen, timeout: int = 5) -> bool
     try:
         # Send SIGTERM
         process.terminate()
-        
+
         # Wait for graceful shutdown
         try:
             await asyncio.wait_for(process.wait(), timeout=timeout)
@@ -117,7 +119,7 @@ async def graceful_shutdown(process: subprocess.Popen, timeout: int = 5) -> bool
             process.kill()
             await process.wait()
             return False
-            
+
     except Exception:
         return False
 
@@ -125,11 +127,11 @@ async def graceful_shutdown(process: subprocess.Popen, timeout: int = 5) -> bool
 def validate_openai_request(request_data: Dict[str, Any]) -> bool:
     """Validate that request follows OpenAI API format."""
     required_fields = ["model"]
-    
+
     for field in required_fields:
         if field not in request_data:
             return False
-    
+
     return True
 
 

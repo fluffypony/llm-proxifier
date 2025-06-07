@@ -1,25 +1,22 @@
 """FastAPI application entry point for the LLM proxy server."""
 
 import logging
-import asyncio
 from contextlib import asynccontextmanager
-from typing import Dict, Any
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
+from llm_proxifier.auth import AuthManager
 from llm_proxifier.config import ConfigManager
+from llm_proxifier.config_api import ConfigurationManager
+from llm_proxifier.dashboard import dashboard_router
+from llm_proxifier.middleware import AuthenticationMiddleware, RateLimitMiddleware
 from llm_proxifier.model_manager import ModelManager
 from llm_proxifier.proxy_handler import ProxyHandler
 from llm_proxifier.queue_manager import QueueManager
-from llm_proxifier.config_api import ConfigurationManager
-from llm_proxifier.dashboard import dashboard_router
-from llm_proxifier.auth import AuthManager
-from llm_proxifier.middleware import AuthenticationMiddleware, RateLimitMiddleware
 from llm_proxifier.utils import format_error_response, get_system_memory_usage
-
 
 # Global instances
 model_manager: ModelManager = None
@@ -34,26 +31,26 @@ configuration_manager: ConfigurationManager = None
 async def lifespan(app: FastAPI):
     """Manage application lifecycle."""
     global model_manager, proxy_handler, config_manager, auth_manager, queue_manager, configuration_manager
-    
+
     # Startup
     logging.basicConfig(level=logging.INFO)
     logger = logging.getLogger(__name__)
-    
+
     try:
         # Initialize configuration
         config_manager = ConfigManager()
         proxy_config = config_manager.proxy_config
-        
+
         # Load model configurations
         model_configs = config_manager.load_model_configs()
         logger.info(f"Loaded {len(model_configs)} model configurations")
-        
+
         # Initialize queue manager
         queue_manager = QueueManager()
-        
+
         # Initialize configuration manager
         configuration_manager = ConfigurationManager()
-        
+
         # Initialize model manager with queue manager
         model_manager = ModelManager(
             timeout_minutes=proxy_config.timeout_minutes,
@@ -61,52 +58,52 @@ async def lifespan(app: FastAPI):
             queue_manager=queue_manager
         )
         model_manager.load_configs(model_configs)
-        
+
         # Initialize proxy handler with queue manager
         proxy_handler = ProxyHandler(queue_manager=queue_manager)
-        
+
         # Initialize authentication manager
         auth_manager = AuthManager(config_manager)
-        
+
         # Connect notification manager to WebSocket manager
         from llm_proxifier.config_notifications import config_notification_manager
         from llm_proxifier.dashboard import manager as websocket_manager
         config_notification_manager.set_websocket_manager(websocket_manager)
-        
+
         # Add authentication middleware
         app.add_middleware(AuthenticationMiddleware, auth_manager=auth_manager)
         app.add_middleware(RateLimitMiddleware, auth_manager=auth_manager)
-        
+
         # Start cleanup tasks
         await model_manager.start_cleanup_task()
         await queue_manager.start_cleanup_task()
-        
+
         # Start auto-start models
         await model_manager.start_all_auto_models()
-        
+
         # Preload models
         await model_manager.preload_models()
-        
+
         logger.info(f"LLM Proxy Server started on {proxy_config.host}:{proxy_config.port}")
-        
+
     except Exception as e:
         logger.error(f"Failed to start server: {e}")
         raise
-    
+
     yield
-    
+
     # Shutdown
     logger.info("Shutting down LLM Proxy Server")
-    
+
     if queue_manager:
         await queue_manager.shutdown()
-    
+
     if model_manager:
         await model_manager.shutdown_all()
-    
+
     if proxy_handler:
         await proxy_handler.close()
-    
+
     logger.info("LLM Proxy Server shutdown complete")
 
 
@@ -157,28 +154,28 @@ async def chat_completions(request: Request):
                 status_code=400,
                 detail=format_error_response(400, "Missing or invalid model name", "invalid_request")
             )
-        
+
         # Check if model is configured
         if model_name not in config_manager.model_configs:
             available_models = list(config_manager.model_configs.keys())
             raise HTTPException(
                 status_code=400,
                 detail=format_error_response(
-                    400, 
+                    400,
                     f"Model '{model_name}' not found. Available models: {available_models}",
                     "model_not_found"
                 )
             )
-        
+
         # Use the proxy handler which will handle queueing if needed
         model_instance = await model_manager.get_or_start_model(model_name)
         if not model_instance:
             # Model failed to start, but proxy handler will handle queueing
             return await proxy_handler.handle_chat_completions(request, model_name, None)
-        
+
         # Forward the request
         return await proxy_handler.handle_chat_completions(request, model_name, model_instance.api_url)
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -200,7 +197,7 @@ async def completions(request: Request):
                 status_code=400,
                 detail=format_error_response(400, "Missing or invalid model name", "invalid_request")
             )
-        
+
         # Check if model is configured
         if model_name not in config_manager.model_configs:
             available_models = list(config_manager.model_configs.keys())
@@ -212,16 +209,16 @@ async def completions(request: Request):
                     "model_not_found"
                 )
             )
-        
+
         # Use the proxy handler which will handle queueing if needed
         model_instance = await model_manager.get_or_start_model(model_name)
         if not model_instance:
             # Model failed to start, but proxy handler will handle queueing
             return await proxy_handler.handle_completions(request, model_name, None)
-        
+
         # Forward the request
         return await proxy_handler.handle_completions(request, model_name, model_instance.api_url)
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -238,7 +235,7 @@ async def list_models():
     try:
         model_status = model_manager.get_all_model_status()
         return await proxy_handler.create_models_response(model_status)
-        
+
     except Exception as e:
         logging.error(f"Error listing models: {e}")
         raise HTTPException(
@@ -253,14 +250,14 @@ async def health_check():
     try:
         model_status = model_manager.get_all_model_status()
         system_memory = get_system_memory_usage()
-        
+
         response = await proxy_handler.create_health_response(model_status)
         response["system"] = {
             "memory": system_memory
         }
-        
+
         return response
-        
+
     except Exception as e:
         logging.error(f"Error in health check: {e}")
         raise HTTPException(
@@ -275,7 +272,7 @@ async def get_metrics():
     try:
         model_status = model_manager.get_all_model_status()
         return await proxy_handler.create_metrics_response(model_status)
-        
+
     except Exception as e:
         logging.error(f"Error getting metrics: {e}")
         raise HTTPException(
@@ -294,9 +291,9 @@ async def start_model(model_name: str):
                 status_code=400,
                 detail=format_error_response(400, f"Failed to start model '{model_name}'", "start_failed")
             )
-        
+
         return {"message": f"Model '{model_name}' started successfully", "status": "running"}
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -317,9 +314,9 @@ async def stop_model(model_name: str):
                 status_code=500,
                 detail=format_error_response(500, f"Failed to stop model '{model_name}'", "stop_failed")
             )
-        
+
         return {"message": f"Model '{model_name}' stopped successfully", "status": "stopped"}
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -339,10 +336,10 @@ async def get_model_status(model_name: str):
                 status_code=404,
                 detail=format_error_response(404, f"Model '{model_name}' not found", "model_not_found")
             )
-        
+
         status = model_manager.get_model_status(model_name)
         return status
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -464,16 +461,16 @@ async def reload_model_config():
             old_configs = dict(config_manager.model_configs)
             new_configs = config_manager.load_model_configs()
             model_manager.load_configs(new_configs)
-            
+
             # Compare changes
             added = set(new_configs.keys()) - set(old_configs.keys())
             removed = set(old_configs.keys()) - set(new_configs.keys())
             modified = set()
-            
+
             for name in old_configs.keys() & new_configs.keys():
                 if old_configs[name].__dict__ != new_configs[name].__dict__:
                     modified.add(name)
-            
+
             return {
                 "message": "Configuration reloaded",
                 "changes": {
@@ -764,11 +761,11 @@ async def validate_auth_config():
 
 if __name__ == "__main__":
     import uvicorn
-    
+
     # Load configuration for local development
     config_manager = ConfigManager()
     proxy_config = config_manager.proxy_config
-    
+
     uvicorn.run(
         "src.main:app",
         host=proxy_config.host,

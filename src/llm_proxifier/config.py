@@ -1,10 +1,11 @@
 """Configuration module for the LLM proxy server."""
 
-import os
 import hashlib
+import os
 from dataclasses import dataclass, field
-from typing import List, Dict, Optional
 from datetime import datetime
+from typing import Dict, List, Optional
+
 import yaml
 
 
@@ -22,12 +23,12 @@ class ModelConfig:
     priority: int = 5
     resource_group: str = "default"
     additional_args: List[str] = field(default_factory=list)
-    
+
     def __post_init__(self):
         """Validate configuration after initialization."""
         if self.port < 1024 or self.port > 65535:
             raise ValueError(f"Port {self.port} is out of valid range")
-        
+
         # Only validate model path if it's not a placeholder path
         if not self.model_path.startswith("./models/") and not os.path.exists(self.model_path):
             raise ValueError(f"Model path {self.model_path} does not exist")
@@ -46,22 +47,22 @@ class ProxyConfig:
     dashboard_port: int = 3000
     dashboard_enabled: bool = True
     auth_enabled: bool = True
-    
+
     def __post_init__(self):
         """Validate configuration after initialization."""
         if self.port < 1024 or self.port > 65535:
             raise ValueError(f"Port {self.port} is out of valid range")
-        
+
         if self.timeout_minutes < 1:
             raise ValueError("Timeout must be at least 1 minute")
-        
+
         if self.max_concurrent_models < 1:
             raise ValueError("Must allow at least 1 concurrent model")
 
 
 class ConfigManager:
     """Manages loading and validation of configurations."""
-    
+
     def __init__(self, config_path: Optional[str] = None, auth_config_path: Optional[str] = None):
         self.config_path = config_path or os.getenv("CONFIG_PATH", "./config/models.yaml")
         self.auth_config_path = auth_config_path or os.getenv("AUTH_CONFIG_PATH", "./config/auth.yaml")
@@ -70,7 +71,7 @@ class ConfigManager:
         self.model_configs: Dict[str, ModelConfig] = {}
         self._config_version = None
         self._auth_version = None
-    
+
     def _load_proxy_config(self) -> ProxyConfig:
         """Load proxy configuration from environment variables."""
         return ProxyConfig(
@@ -85,55 +86,55 @@ class ConfigManager:
             dashboard_enabled=os.getenv("DASHBOARD_ENABLED", "true").lower() == "true",
             auth_enabled=os.getenv("AUTH_ENABLED", "true").lower() == "true"
         )
-    
+
     def load_model_configs(self) -> Dict[str, ModelConfig]:
         """Load model configurations from YAML file."""
         try:
-            with open(self.config_path, 'r') as f:
+            with open(self.config_path) as f:
                 data = yaml.safe_load(f)
-            
+
             if 'models' not in data:
                 raise ValueError("Configuration file must contain 'models' section")
-            
+
             configs = {}
             for name, config_data in data['models'].items():
                 config_data['name'] = name
                 configs[name] = ModelConfig(**config_data)
-            
+
             self.model_configs = configs
             return configs
-            
+
         except FileNotFoundError:
             raise ValueError(f"Configuration file not found: {self.config_path}")
         except yaml.YAMLError as e:
             raise ValueError(f"Invalid YAML in configuration file: {e}")
         except Exception as e:
             raise ValueError(f"Error loading configuration: {e}")
-    
+
     def get_model_config(self, name: str) -> Optional[ModelConfig]:
         """Get configuration for a specific model."""
         return self.model_configs.get(name)
-    
+
     def list_model_names(self) -> List[str]:
         """Get list of configured model names."""
         return list(self.model_configs.keys())
-    
+
     def _load_auth_config(self) -> 'AuthConfig':
         """Load authentication configuration from YAML file."""
         try:
-            with open(self.auth_config_path, 'r') as f:
+            with open(self.auth_config_path) as f:
                 data = yaml.safe_load(f)
-            
+
             if 'authentication' not in data:
                 return AuthConfig()  # Return default config if no auth section
-            
+
             auth_data = data['authentication']
-            
+
             # Parse API keys
             keys = []
             for key_data in auth_data.get('api_keys', []):
                 keys.append(APIKeyConfig(**key_data))
-            
+
             return AuthConfig(
                 enabled=auth_data.get('enabled', False),
                 keys=keys,
@@ -141,7 +142,7 @@ class ConfigManager:
                 dashboard_auth_required=auth_data.get('dashboard_auth_required', True),
                 rate_limits=auth_data.get('rate_limits', {"default": 100})
             )
-            
+
         except FileNotFoundError:
             # Return default config if auth file doesn't exist
             return AuthConfig()
@@ -149,12 +150,12 @@ class ConfigManager:
             raise ValueError(f"Invalid YAML in auth configuration file: {e}")
         except Exception as e:
             raise ValueError(f"Error loading auth configuration: {e}")
-    
+
     def validate_model_ports(self) -> bool:
         """Validate that all model ports are unique."""
         ports = [config.port for config in self.model_configs.values()]
         return len(ports) == len(set(ports))
-    
+
     def get_config_hash(self, file_path: str) -> str:
         """Get hash of configuration file content."""
         try:
@@ -163,7 +164,7 @@ class ConfigManager:
             return hashlib.md5(content).hexdigest()
         except FileNotFoundError:
             return ""
-    
+
     def has_config_changed(self) -> bool:
         """Check if model configuration has changed."""
         current_hash = self.get_config_hash(self.config_path)
@@ -171,7 +172,7 @@ class ConfigManager:
             self._config_version = current_hash
             return True
         return False
-    
+
     def has_auth_config_changed(self) -> bool:
         """Check if auth configuration has changed."""
         current_hash = self.get_config_hash(self.auth_config_path)
@@ -188,7 +189,7 @@ class APIKeyConfig:
     name: str
     permissions: List[str] = field(default_factory=lambda: ["*"])
     expires: Optional[str] = None
-    
+
     def is_expired(self) -> bool:
         """Check if the key has expired."""
         if not self.expires:
@@ -198,7 +199,7 @@ class APIKeyConfig:
             return datetime.now() > expiry_date
         except ValueError:
             return False
-    
+
     def has_permission(self, endpoint: str) -> bool:
         """Check if key has permission for endpoint."""
         if "*" in self.permissions:
@@ -214,11 +215,11 @@ class AuthConfig:
     public_endpoints: List[str] = field(default_factory=lambda: ["/health", "/metrics"])
     dashboard_auth_required: bool = True
     rate_limits: Dict[str, int] = field(default_factory=lambda: {"default": 100})
-    
+
     def get_api_key(self, key: str) -> Optional[APIKeyConfig]:
         """Get API key configuration by key value."""
         return next((api_key for api_key in self.keys if api_key.key == key), None)
-    
+
     def is_public_endpoint(self, endpoint: str) -> bool:
         """Check if endpoint is public (no auth required)."""
         return any(endpoint.startswith(pub) for pub in self.public_endpoints)
