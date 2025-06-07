@@ -224,6 +224,7 @@ class BulkOperationModel(BaseModel):
 
 class ConfigUpdateModel(BaseModel):
     config_data: Dict[str, Any]
+    config_type: str = "models"  # "models" or "auth"
 
 
 # Priority Management Endpoints
@@ -449,14 +450,35 @@ async def get_models_config():
 
 @dashboard_router.post("/api/config/models")
 async def update_models_config(config_update: ConfigUpdateModel):
-    """Update model configuration (placeholder implementation)."""
+    """Update model configuration using ConfigurationManager."""
     try:
-        # This would need a proper configuration management system
-        # For now, return a mock response
-        return {
-            "success": False,
-            "message": "Configuration updates not yet implemented - requires full config management system"
-        }
+        from src.main import configuration_manager, model_manager, config_manager
+        if not configuration_manager:
+            raise HTTPException(status_code=503, detail="Configuration manager not available")
+        
+        # Save configuration with backup
+        result = configuration_manager.save_models_config(config_update.config_data, backup=True)
+        
+        if result["success"]:
+            # Reload application configuration
+            try:
+                new_configs = config_manager.load_model_configs()
+                model_manager.load_configs(new_configs)
+                
+                # Broadcast configuration change via WebSocket
+                await manager.broadcast_json({
+                    "type": "config_updated",
+                    "config_type": "models",
+                    "timestamp": datetime.utcnow().isoformat(),
+                    "backup_id": result.get("backup_created")
+                })
+                
+            except Exception as reload_error:
+                logger.error(f"Error reloading config after save: {reload_error}")
+                result["warnings"] = result.get("warnings", [])
+                result["warnings"].append(f"Configuration saved but reload failed: {reload_error}")
+        
+        return result
     except Exception as e:
         logger.error(f"Error updating models config: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -486,14 +508,174 @@ async def get_auth_config():
 
 @dashboard_router.post("/api/config/auth")
 async def update_auth_config(config_update: ConfigUpdateModel):
-    """Update auth configuration (placeholder implementation)."""
+    """Update auth configuration using ConfigurationManager."""
     try:
-        # This would need a proper configuration management system
-        # For now, return a mock response
-        return {
-            "success": False,
-            "message": "Auth configuration updates not yet implemented - requires full config management system"
-        }
+        from src.main import configuration_manager, config_manager
+        if not configuration_manager:
+            raise HTTPException(status_code=503, detail="Configuration manager not available")
+        
+        # Save configuration with backup
+        result = configuration_manager.save_auth_config(config_update.config_data, backup=True)
+        
+        if result["success"]:
+            # Reload application configuration
+            try:
+                config_manager.auth_config = config_manager._load_auth_config()
+                
+                # Broadcast configuration change via WebSocket
+                await manager.broadcast_json({
+                    "type": "config_updated",
+                    "config_type": "auth",
+                    "timestamp": datetime.utcnow().isoformat(),
+                    "backup_id": result.get("backup_created")
+                })
+                
+            except Exception as reload_error:
+                logger.error(f"Error reloading auth config after save: {reload_error}")
+                result["warnings"] = result.get("warnings", [])
+                result["warnings"].append(f"Configuration saved but reload failed: {reload_error}")
+        
+        return result
     except Exception as e:
         logger.error(f"Error updating auth config: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# Configuration Backup/Restore Endpoints
+@dashboard_router.get("/api/config/backups")
+async def list_config_backups(config_type: str = None):
+    """List available configuration backups."""
+    try:
+        from src.main import configuration_manager
+        if not configuration_manager:
+            raise HTTPException(status_code=503, detail="Configuration manager not available")
+        
+        backups = configuration_manager.list_backups(config_type)
+        
+        return {
+            "backups": [
+                {
+                    "backup_id": backup.backup_id,
+                    "config_type": backup.config_type,
+                    "timestamp": backup.timestamp.isoformat(),
+                    "description": backup.description,
+                    "file_path": backup.file_path
+                }
+                for backup in backups
+            ]
+        }
+    except Exception as e:
+        logger.error(f"Error listing backups: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@dashboard_router.post("/api/config/backup")
+async def create_config_backup(config_type: str, description: str = "Manual backup"):
+    """Create a backup of current configuration."""
+    try:
+        from src.main import configuration_manager
+        if not configuration_manager:
+            raise HTTPException(status_code=503, detail="Configuration manager not available")
+        
+        result = configuration_manager.backup_config(config_type, description)
+        
+        if result["success"]:
+            # Broadcast backup creation via WebSocket
+            await manager.broadcast_json({
+                "type": "backup_created",
+                "config_type": config_type,
+                "backup_id": result["backup_id"],
+                "timestamp": datetime.utcnow().isoformat()
+            })
+        
+        return result
+    except Exception as e:
+        logger.error(f"Error creating backup: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@dashboard_router.post("/api/config/restore")
+async def restore_config_backup(config_type: str, backup_id: str):
+    """Restore configuration from backup."""
+    try:
+        from src.main import configuration_manager, model_manager, config_manager
+        if not configuration_manager:
+            raise HTTPException(status_code=503, detail="Configuration manager not available")
+        
+        result = configuration_manager.restore_config(config_type, backup_id)
+        
+        if result["success"]:
+            # Reload application configuration
+            try:
+                if config_type == "models":
+                    new_configs = config_manager.load_model_configs()
+                    model_manager.load_configs(new_configs)
+                elif config_type == "auth":
+                    config_manager.auth_config = config_manager._load_auth_config()
+                
+                # Broadcast restore event via WebSocket
+                await manager.broadcast_json({
+                    "type": "config_restored",
+                    "config_type": config_type,
+                    "backup_id": backup_id,
+                    "timestamp": datetime.utcnow().isoformat()
+                })
+                
+            except Exception as reload_error:
+                logger.error(f"Error reloading config after restore: {reload_error}")
+                result["warnings"] = result.get("warnings", [])
+                result["warnings"].append(f"Configuration restored but reload failed: {reload_error}")
+        
+        return result
+    except Exception as e:
+        logger.error(f"Error restoring backup: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@dashboard_router.post("/api/config/preview")
+async def preview_config_changes(config_update: ConfigUpdateModel):
+    """Preview configuration changes without applying."""
+    try:
+        from src.main import configuration_manager
+        if not configuration_manager:
+            raise HTTPException(status_code=503, detail="Configuration manager not available")
+        
+        config_type = config_update.config_type
+        new_config = config_update.config_data
+        
+        # Load current configuration
+        if config_type == "models":
+            current_config = configuration_manager.load_models_config()
+        else:
+            current_config = configuration_manager.load_auth_config()
+        
+        # Validate new configuration
+        validation_result = configuration_manager.validate_config(new_config, config_type)
+        
+        # Generate simple diff information
+        changes = []
+        if config_type == "models" and "models" in new_config and "models" in current_config:
+            current_models = set(current_config["models"].keys())
+            new_models = set(new_config["models"].keys())
+            
+            # Added models
+            for model in new_models - current_models:
+                changes.append(f"Added model: {model}")
+            
+            # Removed models
+            for model in current_models - new_models:
+                changes.append(f"Removed model: {model}")
+            
+            # Modified models
+            for model in new_models & current_models:
+                if new_config["models"][model] != current_config["models"][model]:
+                    changes.append(f"Modified model: {model}")
+        
+        return {
+            "validation": validation_result,
+            "changes": changes,
+            "total_changes": len(changes)
+        }
+    except Exception as e:
+        logger.error(f"Error previewing config changes: {e}")
         raise HTTPException(status_code=500, detail=str(e))
