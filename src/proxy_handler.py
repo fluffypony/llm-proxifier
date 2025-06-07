@@ -2,11 +2,13 @@
 
 import json
 import logging
+import uuid
 from typing import Dict, Any, Optional, AsyncGenerator
 import httpx
 from fastapi import HTTPException, Request
 from fastapi.responses import StreamingResponse, JSONResponse
 
+from src.queue_manager import QueueManager, ModelState
 from src.utils import (
     extract_model_name,
     validate_openai_request,
@@ -18,9 +20,10 @@ from src.utils import (
 class ProxyHandler:
     """Handles proxying requests to model servers."""
     
-    def __init__(self):
+    def __init__(self, queue_manager: QueueManager = None):
         self.logger = logging.getLogger(__name__)
         self.client = httpx.AsyncClient(timeout=httpx.Timeout(300.0))  # 5 minute timeout
+        self.queue_manager = queue_manager
     
     async def extract_model_from_request(self, request: Request) -> Optional[str]:
         """Extract model name from the request body."""
@@ -43,7 +46,122 @@ class ProxyHandler:
             self.logger.error(f"Error extracting model from request: {e}")
             return None
     
-    async def forward_request(self, request: Request, target_url: str, endpoint: str) -> Any:
+    async def should_queue_request(self, model_name: str) -> bool:
+        """Check if request should be queued for the model."""
+        if not self.queue_manager:
+            return False
+        return self.queue_manager.should_queue_request(model_name)
+    
+    async def queue_request(self, model_name: str, endpoint: str) -> Dict[str, Any]:
+        """Queue a request for later processing."""
+        if not self.queue_manager:
+            return {"queued": False, "error": "Queue manager not available"}
+        
+        request_id = str(uuid.uuid4())
+        client_id = str(uuid.uuid4())  # In a real implementation, you'd extract this from auth
+        
+        success = await self.queue_manager.queue_request(model_name, request_id, client_id, endpoint)
+        
+        if success:
+            queue_stats = self.queue_manager.get_queue_stats(model_name)
+            return {
+                "queued": True,
+                "request_id": request_id,
+                "position": queue_stats.get("queue_size", 0),
+                "model_state": queue_stats.get("state", "unknown")
+            }
+        else:
+            return {"queued": False, "error": "Queue is full"}
+    
+    def get_queue_headers(self, model_name: str) -> Dict[str, str]:
+        """Get queue-related headers for responses."""
+        if not self.queue_manager:
+            return {}
+        
+        stats = self.queue_manager.get_queue_stats(model_name)
+        headers = {}
+        
+        if stats.get("queue_size", 0) > 0:
+            headers["X-Queue-Position"] = str(stats["queue_size"])
+            headers["X-Queue-Model-State"] = stats.get("state", "unknown")
+        
+        return headers
+    
+    async def handle_chat_completions(self, request: Request, model_name: str, target_url: str) -> Any:
+        """Handle chat completions with queueing support."""
+        # Check if request should be queued
+        if await self.should_queue_request(model_name):
+            queue_result = await self.queue_request(model_name, "/v1/chat/completions")
+            
+            if queue_result["queued"]:
+                # Return 202 Accepted with queue information
+                return JSONResponse(
+                    status_code=202,
+                    content={
+                        "message": "Request queued",
+                        "request_id": queue_result["request_id"],
+                        "position": queue_result["position"],
+                        "model_state": queue_result["model_state"]
+                    },
+                    headers={
+                        "Retry-After": "30",  # Suggest retry after 30 seconds
+                        "X-Queue-Position": str(queue_result["position"]),
+                        "X-Queue-Model-State": queue_result["model_state"]
+                    }
+                )
+            else:
+                # Queue is full, return 503
+                return JSONResponse(
+                    status_code=503,
+                    content=format_error_response(
+                        503, 
+                        "Service temporarily unavailable - queue is full", 
+                        "service_unavailable"
+                    ),
+                    headers={"Retry-After": "60"}
+                )
+        
+        # Normal request processing
+        return await self.forward_request(request, target_url, "/v1/chat/completions", model_name)
+    
+    async def handle_completions(self, request: Request, model_name: str, target_url: str) -> Any:
+        """Handle completions with queueing support."""
+        # Check if request should be queued
+        if await self.should_queue_request(model_name):
+            queue_result = await self.queue_request(model_name, "/v1/completions")
+            
+            if queue_result["queued"]:
+                # Return 202 Accepted with queue information
+                return JSONResponse(
+                    status_code=202,
+                    content={
+                        "message": "Request queued",
+                        "request_id": queue_result["request_id"],
+                        "position": queue_result["position"],
+                        "model_state": queue_result["model_state"]
+                    },
+                    headers={
+                        "Retry-After": "30",
+                        "X-Queue-Position": str(queue_result["position"]),
+                        "X-Queue-Model-State": queue_result["model_state"]
+                    }
+                )
+            else:
+                # Queue is full, return 503
+                return JSONResponse(
+                    status_code=503,
+                    content=format_error_response(
+                        503, 
+                        "Service temporarily unavailable - queue is full", 
+                        "service_unavailable"
+                    ),
+                    headers={"Retry-After": "60"}
+                )
+        
+        # Normal request processing
+        return await self.forward_request(request, target_url, "/v1/completions", model_name)
+    
+    async def forward_request(self, request: Request, target_url: str, endpoint: str, model_name: str = None) -> Any:
         """Forward request to the target model server."""
         try:
             # Get original request body
@@ -72,7 +190,7 @@ class ProxyHandler:
             if 'text/event-stream' in content_type or 'stream' in str(dict(request.query_params)):
                 return await self._handle_streaming_response(response)
             else:
-                return await self._handle_regular_response(response)
+                return await self._handle_regular_response(response, model_name)
                 
         except httpx.RequestError as e:
             self.logger.error(f"Request error when forwarding to {target_url}: {e}")
@@ -118,23 +236,34 @@ class ProxyHandler:
             }
         )
     
-    async def _handle_regular_response(self, response: httpx.Response) -> JSONResponse:
+    async def _handle_regular_response(self, response: httpx.Response, model_name: str = None) -> JSONResponse:
         """Handle regular JSON response."""
         try:
             content = response.json()
             
+            # Get response headers and add queue headers if available
+            response_headers = dict(response.headers)
+            if model_name:
+                queue_headers = self.get_queue_headers(model_name)
+                response_headers.update(queue_headers)
+            
             return JSONResponse(
                 content=content,
                 status_code=response.status_code,
-                headers=dict(response.headers)
+                headers=response_headers
             )
             
         except json.JSONDecodeError:
             # If response is not JSON, return as text
+            response_headers = dict(response.headers)
+            if model_name:
+                queue_headers = self.get_queue_headers(model_name)
+                response_headers.update(queue_headers)
+                
             return JSONResponse(
                 content={"text": response.text},
                 status_code=response.status_code,
-                headers=dict(response.headers)
+                headers=response_headers
             )
     
     def transform_error_response(self, error: Exception, status_code: int = 500) -> Dict[str, Any]:
