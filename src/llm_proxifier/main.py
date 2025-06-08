@@ -64,7 +64,7 @@ async def lifespan(app: FastAPI):
 
         # Initialize authentication manager
         auth_manager = AuthManager(config_manager)
-        
+
         # Store globally for middleware access
         app.state.auth_manager = auth_manager
 
@@ -72,7 +72,7 @@ async def lifespan(app: FastAPI):
         from llm_proxifier.config_notifications import config_notification_manager
         from llm_proxifier.dashboard import manager as websocket_manager
         config_notification_manager.set_websocket_manager(websocket_manager)
-        
+
 
 
         # Start cleanup tasks

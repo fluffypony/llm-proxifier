@@ -327,7 +327,7 @@ class ProxyHandler:
         """Create a models list response in OpenAI format."""
         models = []
 
-        for name, status in available_models.items():
+        for name, _status in available_models.items():
             model_info = {
                 "id": name,
                 "object": "model",
