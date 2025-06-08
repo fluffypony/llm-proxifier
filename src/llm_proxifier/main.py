@@ -79,11 +79,9 @@ async def lifespan(app: FastAPI):
         await model_manager.start_cleanup_task()
         await queue_manager.start_cleanup_task()
 
-        # Start auto-start models
-        await model_manager.start_all_auto_models()
-
-        # Preload models
-        await model_manager.preload_models()
+        # On-demand mode: Models will start only when requested
+        # await model_manager.start_all_auto_models()
+        # await model_manager.preload_models()
 
         logger.info(f"LLM Proxy Server started on {proxy_config.host}:{proxy_config.port}")
 
