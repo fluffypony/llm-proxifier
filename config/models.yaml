@@ -4,51 +4,49 @@ models:
     model_path: "./models/qwen-32b/qwen2.5-coder-32b-instruct-q8_0.gguf"
     context_length: 32768
     gpu_layers: -1
-    chat_format: chatml
     auto_start: false
     preload: false
     priority: 1
     resource_group: "large-models"
     additional_args:
-      - "--mlock"
-      - "--n_batch=512"
+      - "-b 2048"
+      - "-t 8"
 
   deepseek-lite:
     port: 11002
     model_path: "./models/deepseek-lite/DeepSeek-Coder-V2-Lite-Instruct-Q4_K_M.gguf"
     context_length: 16384
     gpu_layers: -1
-    chat_format: chatml
     auto_start: true
     preload: true
     priority: 10
     resource_group: "lite-models"
     additional_args:
-      - "--mlock"
+      - "-b 4096"
+      - "-t 8"
 
   qwen-7b:
     port: 11003
     model_path: "./models/qwen-7b/qwen2.5-coder-7b-instruct-q5_k_m.gguf"
     context_length: 32768
     gpu_layers: -1
-    chat_format: chatml
     auto_start: true
     preload: false
     priority: 5
     resource_group: "medium-models"
     additional_args:
-      - "--mlock"
+      - "-b 3072"
+      - "-t 8"
 
   llama-70b:
     port: 11004
     model_path: "./models/llama-70b/meta-llama_Llama-4-Scout-17B-16E-Instruct-Q8_0-00001-of-00003.gguf"
     context_length: 8192
     gpu_layers: 30
-    chat_format: llama-2
     auto_start: false
     preload: false
     priority: 1
     resource_group: "large-models"
     additional_args:
-      - "--mlock"
-      - "--threads=16"
+      - "-b 2048"
+      - "-t 16"
