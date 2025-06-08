@@ -7,15 +7,7 @@ from typing import Optional
 
 def get_version() -> str:
     """Get version string from git tags or fallback to static version."""
-    try:
-        # Try to get version from git
-        git_version = _get_git_version()
-        if git_version:
-            return git_version
-    except Exception:
-        pass
-
-    # Fallback to static version
+    # Use static version for now to avoid packaging issues
     return "1.8.0"
 
 

@@ -19,12 +19,24 @@ logger = logging.getLogger(__name__)
 class AuthenticationMiddleware(BaseHTTPMiddleware):
     """Middleware to handle API key authentication and authorization."""
 
-    def __init__(self, app, auth_manager: AuthManager):
+    def __init__(self, app, auth_manager: AuthManager = None):
         super().__init__(app)
+        self.auth_manager = auth_manager
+        
+    def set_auth_manager(self, auth_manager: AuthManager):
+        """Set the auth manager after initialization."""
         self.auth_manager = auth_manager
 
     async def dispatch(self, request: Request, call_next):
         """Process authentication for each request."""
+        # Get auth_manager from app state if not set
+        if self.auth_manager is None:
+            self.auth_manager = getattr(request.app.state, 'auth_manager', None)
+            
+        # If auth_manager is still not available, skip authentication
+        if self.auth_manager is None:
+            return await call_next(request)
+            
         # Skip auth for static files
         if request.url.path.startswith("/static/"):
             return await call_next(request)
@@ -88,13 +100,25 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
 class RateLimitMiddleware(BaseHTTPMiddleware):
     """Middleware to handle rate limiting per API key."""
 
-    def __init__(self, app, auth_manager: AuthManager):
+    def __init__(self, app, auth_manager: AuthManager = None):
         super().__init__(app)
         self.auth_manager = auth_manager
         self.request_counts = {}  # Simple in-memory store - TODO: use Redis for production
+        
+    def set_auth_manager(self, auth_manager: AuthManager):
+        """Set the auth manager after initialization."""
+        self.auth_manager = auth_manager
 
     async def dispatch(self, request: Request, call_next):
         """Process rate limiting for each request."""
+        # Get auth_manager from app state if not set
+        if self.auth_manager is None:
+            self.auth_manager = getattr(request.app.state, 'auth_manager', None)
+            
+        # If auth_manager is still not available, skip rate limiting
+        if self.auth_manager is None:
+            return await call_next(request)
+            
         # Skip rate limiting for static files
         if request.url.path.startswith("/static/"):
             return await call_next(request)

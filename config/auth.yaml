@@ -29,6 +29,6 @@ authentication:
   
   # Rate limiting (requests per minute per key)
   rate_limits:
-    default: 100
-    admin: 1000
-    readonly: 50
+    default: 1000
+    admin: 10000
+    readonly: 500

@@ -64,15 +64,16 @@ async def lifespan(app: FastAPI):
 
         # Initialize authentication manager
         auth_manager = AuthManager(config_manager)
+        
+        # Store globally for middleware access
+        app.state.auth_manager = auth_manager
 
         # Connect notification manager to WebSocket manager
         from llm_proxifier.config_notifications import config_notification_manager
         from llm_proxifier.dashboard import manager as websocket_manager
         config_notification_manager.set_websocket_manager(websocket_manager)
+        
 
-        # Add authentication middleware
-        app.add_middleware(AuthenticationMiddleware, auth_manager=auth_manager)
-        app.add_middleware(RateLimitMiddleware, auth_manager=auth_manager)
 
         # Start cleanup tasks
         await model_manager.start_cleanup_task()
@@ -124,13 +125,18 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Add authentication middleware
+app.add_middleware(AuthenticationMiddleware)
+app.add_middleware(RateLimitMiddleware)
+
 # Mount static files for dashboard
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
-# Note: Authentication middleware will be added after startup in lifespan
-
 # Include dashboard router
 app.include_router(dashboard_router)
+
+# Add conditional middleware after app setup
+# This will be properly initialized during lifespan startup
 
 
 @app.exception_handler(Exception)

@@ -6,7 +6,7 @@
 set -e
 
 # Default values
-PROXY_HOST="${PROXY_HOST:-0.0.0.0}"
+PROXY_HOST="${PROXY_HOST:-127.0.0.1}"
 PROXY_PORT="${PROXY_PORT:-8000}"
 CONFIG_PATH="${CONFIG_PATH:-./config/models.yaml}"
 LOG_LEVEL="${LOG_LEVEL:-INFO}"
@@ -101,6 +101,7 @@ export DASHBOARD_PORT="$DASHBOARD_PORT"
 export AUTH_CONFIG_PATH="$AUTH_CONFIG"
 export DASHBOARD_ENABLED="$ENABLE_DASHBOARD"
 export AUTH_ENABLED="$([ "$DISABLE_AUTH" = "true" ] && echo "false" || echo "true")"
+export PYTHONPATH="${PYTHONPATH:+$PYTHONPATH:}$(pwd)/src"
 
 echo "Starting LLM Proxifier..."
 echo "Host: $PROXY_HOST"
@@ -114,7 +115,7 @@ echo "Auth Enabled: $AUTH_ENABLED"
 echo ""
 
 # Start the server
-uvicorn src.main:app \
+uvicorn llm_proxifier.main:app \
     --host "$PROXY_HOST" \
     --port "$PROXY_PORT" \
     --log-level "$(echo $LOG_LEVEL | tr '[:upper:]' '[:lower:]')" \
