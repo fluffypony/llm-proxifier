@@ -66,14 +66,31 @@ def format_llama_cpp_command(config: ModelConfig) -> List[str]:
         "--port", str(config.port)
     ]
 
-    # Add all user-specified arguments, handling spaces in arguments
+    # Check if user has specified --host in their additional_args
+    user_specified_host = False
+    user_args = []
+    
     for arg in config.additional_args:
         if ' ' in arg:
             # Split arguments that contain spaces (e.g., "-c 16384" -> ["-c", "16384"])
-            cmd.extend(shlex.split(arg))
+            split_args = shlex.split(arg)
+            user_args.extend(split_args)
+            # Check if --host is in the split arguments
+            if "--host" in split_args:
+                user_specified_host = True
         else:
             # Single argument, add as-is
-            cmd.append(arg)
+            user_args.append(arg)
+            # Check if this is a --host argument
+            if arg == "--host":
+                user_specified_host = True
+    
+    # Add default --host for security if user hasn't specified one
+    if not user_specified_host:
+        cmd.extend(["--host", "127.0.0.1"])
+    
+    # Add all user-specified arguments
+    cmd.extend(user_args)
 
     return cmd
 

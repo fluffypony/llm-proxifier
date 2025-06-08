@@ -13,21 +13,16 @@
 # Model Configuration Fields:
 # - port: Local port for the model server
 # - model_path: Path to the GGUF model file
-# - context_length: [NOT USED] For documentation only - specify -c in additional_args
-# - gpu_layers: [NOT USED] For documentation only - specify -ngl in additional_args
-# - auto_start: [IGNORED in on-demand mode] Start model on server startup
-# - preload: [IGNORED in on-demand mode] Keep model always loaded
 # - priority: Loading priority (higher = loaded first when concurrent limit hit)
 # - resource_group: Logical grouping for batch operations
 # - additional_args: ALL arguments passed to llama-server (except --model and --port)
 #                   Can use: ["-c 16384", "-ngl -1"] or ["-c", "16384", "-ngl", "-1"]
+#                   Note: --host defaults to 127.0.0.1 for security, override with "--host 0.0.0.0"
 
 models:
   qwen-32b:
     port: 11001
     model_path: "~/models/qwen-32b/qwen2.5-coder-32b-instruct-q8_0.gguf"
-    context_length: 32768  # Not used in command generation anymore
-    gpu_layers: -1         # Not used in command generation anymore
     auto_start: false
     preload: false
     priority: 1
@@ -35,15 +30,12 @@ models:
     additional_args:
       - "-c 32768"
       - "-ngl -1"
-      - "--host 127.0.0.1"
       - "-b 2048"
       - "-t 8"
 
   deepseek-lite:
     port: 11002
     model_path: "~/models/deepseek-lite/DeepSeek-Coder-V2-Lite-Instruct-Q4_K_M.gguf"
-    context_length: 16384  # Not used in command generation anymore
-    gpu_layers: -1         # Not used in command generation anymore
     auto_start: true
     preload: true
     priority: 10
@@ -51,15 +43,12 @@ models:
     additional_args:
       - "-c 16384"
       - "-ngl -1"
-      - "--host 127.0.0.1"
       - "-b 4096"
       - "-t 8"
 
   qwen-7b:
     port: 11003
     model_path: "~/models/qwen-7b/qwen2.5-coder-7b-instruct-q5_k_m.gguf"
-    context_length: 32768  # Not used in command generation anymore
-    gpu_layers: -1         # Not used in command generation anymore
     auto_start: true
     preload: false
     priority: 5
@@ -67,15 +56,12 @@ models:
     additional_args:
       - "-c 32768"
       - "-ngl -1"
-      - "--host 127.0.0.1"
       - "-b 3072"
       - "-t 8"
 
   llama-70b:
     port: 11004
     model_path: "~/models/llama-70b/meta-llama_Llama-4-Scout-17B-16E-Instruct-Q8_0-00001-of-00003.gguf"
-    context_length: 8192   # Not used in command generation anymore
-    gpu_layers: 30         # Not used in command generation anymore
     auto_start: false
     preload: false
     priority: 1
@@ -83,6 +69,5 @@ models:
     additional_args:
       - "-c 8192"
       - "-ngl 30"
-      - "--host 127.0.0.1"
       - "-b 2048"
       - "-t 16"
