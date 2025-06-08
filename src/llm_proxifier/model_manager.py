@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import os
 import subprocess
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -57,8 +58,15 @@ class ModelInstance:
             return False
 
         try:
+            # Check if model file exists
+            if not os.path.exists(self.config.model_path):
+                logging.error(f"Model file not found: {self.config.model_path}")
+                return False
+            
             cmd = format_llama_cpp_command(self.config)
             logging.info(f"Starting model {self.config.name} with command: {' '.join(cmd)}")
+            logging.info(f"Model file: {self.config.model_path}")
+            logging.info(f"Working directory: {os.getcwd()}")
 
             # Start the process
             self.process = subprocess.Popen(
@@ -82,6 +90,19 @@ class ModelInstance:
                 logging.info(f"Model {self.config.name} started successfully on port {self.config.port}")
                 return True
             else:
+                # Capture and log subprocess output for debugging
+                if self.process:
+                    try:
+                        stdout, stderr = self.process.communicate(timeout=5)
+                        if stdout:
+                            logging.error(f"Model {self.config.name} stdout: {stdout}")
+                        if stderr:
+                            logging.error(f"Model {self.config.name} stderr: {stderr}")
+                    except subprocess.TimeoutExpired:
+                        logging.error(f"Model {self.config.name} process did not terminate cleanly")
+                    except Exception as e:
+                        logging.error(f"Error reading subprocess output for {self.config.name}: {e}")
+                
                 logging.error(f"Model {self.config.name} failed to start or health check failed")
                 if queue_manager:
                     queue_manager.set_model_state(self.config.name, ModelState.STOPPED)
@@ -90,6 +111,16 @@ class ModelInstance:
 
         except Exception as e:
             logging.error(f"Error starting model {self.config.name}: {e}")
+            # Try to capture subprocess output if available
+            if self.process:
+                try:
+                    stdout, stderr = self.process.communicate(timeout=5)
+                    if stdout:
+                        logging.error(f"Model {self.config.name} stdout: {stdout}")
+                    if stderr:
+                        logging.error(f"Model {self.config.name} stderr: {stderr}")
+                except:
+                    pass  # Don't let subprocess logging errors mask the original error
             if queue_manager:
                 queue_manager.set_model_state(self.config.name, ModelState.STOPPED)
             await self.stop()
