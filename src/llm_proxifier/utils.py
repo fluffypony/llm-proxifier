@@ -58,17 +58,14 @@ def format_llama_cpp_command(config: ModelConfig) -> List[str]:
     # Expand ~ to home directory in model path
     expanded_model_path = os.path.expanduser(config.model_path)
     
+    # Only add essential arguments - let user control everything else via additional_args
     cmd = [
         "llama-server",
         "--model", expanded_model_path,
-        "--port", str(config.port),
-        "--ctx-size", str(config.context_length),
-        "--n-gpu-layers", str(config.gpu_layers),
-        "--chat-template", config.chat_format,
-        "--host", "127.0.0.1"
+        "--port", str(config.port)
     ]
 
-    # Add additional arguments
+    # Add all user-specified arguments
     cmd.extend(config.additional_args)
 
     return cmd
