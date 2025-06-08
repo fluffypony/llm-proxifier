@@ -4,11 +4,37 @@ import os
 import subprocess
 from typing import Optional
 
+try:
+    import tomllib
+except ImportError:
+    import tomli as tomllib
+
 
 def get_version() -> str:
-    """Get version string from git tags or fallback to static version."""
-    # Use static version for now to avoid packaging issues
-    return "1.8.0"
+    """Get version string from pyproject.toml or git tags."""
+    # First try to read from pyproject.toml
+    try:
+        # Get the path to pyproject.toml (go up from src/llm_proxifier to project root)
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        project_root = os.path.dirname(os.path.dirname(current_dir))
+        toml_path = os.path.join(project_root, "pyproject.toml")
+        
+        if os.path.exists(toml_path):
+            with open(toml_path, "rb") as f:
+                pyproject = tomllib.load(f)
+                version = pyproject.get("project", {}).get("version")
+                if version:
+                    return version
+    except Exception:
+        pass
+    
+    # Fallback to git version
+    git_version = _get_git_version()
+    if git_version:
+        return git_version
+    
+    # Final fallback
+    return "0.1.0"
 
 
 def _get_git_version() -> Optional[str]:

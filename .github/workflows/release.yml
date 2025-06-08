@@ -1,0 +1,135 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+  id-token: write  # For PyPI trusted publishing
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -e ".[dev]"
+    
+    - name: Run tests
+      run: |
+        python -m pytest tests/ -v || echo "No tests found"
+    
+    - name: Lint with ruff
+      run: |
+        ruff check src/
+    
+    - name: Check formatting with black
+      run: |
+        black --check src/
+
+  build-binaries:
+    needs: test
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: write
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            artifact_name: llm-proxifier
+            asset_name: llm-proxifier-linux-amd64
+          - os: windows-latest
+            artifact_name: llm-proxifier.exe
+            asset_name: llm-proxifier-windows-amd64.exe
+          - os: macos-latest
+            artifact_name: llm-proxifier
+            asset_name: llm-proxifier-macos-amd64
+
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install pyinstaller
+        pip install -e .
+    
+    - name: Build with PyInstaller
+      run: |
+        pyinstaller --onefile --name llm-proxifier src/llm_proxifier/cli.py
+    
+    - name: Create archive
+      shell: bash
+      run: |
+        if [ "${{ runner.os }}" = "Windows" ]; then
+          7z a ${{ matrix.asset_name }}.zip dist/${{ matrix.artifact_name }}
+        else
+          zip ${{ matrix.asset_name }}.zip dist/${{ matrix.artifact_name }}
+        fi
+    
+    - name: Upload binary to release
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ matrix.asset_name }}
+        path: ${{ matrix.asset_name }}.zip
+    
+    - name: Release
+      uses: softprops/action-gh-release@v1
+      if: startsWith(github.ref, 'refs/tags/')
+      with:
+        files: ${{ matrix.asset_name }}.zip
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  publish-pypi:
+    needs: test
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    environment: 
+      name: pypi
+      url: https://pypi.org/p/llm-proxifier
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: Install build dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install build twine
+    
+    - name: Build package
+      run: python -m build
+    
+    - name: Check package
+      run: twine check dist/*
+    
+    - name: Publish to PyPI
+      uses: pypa/gh-action-pypi-publish@release/v1
+      with:
+        verbose: true

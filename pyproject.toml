@@ -35,8 +35,9 @@ dependencies = [
     "psutil>=5.9.0",
     "click>=8.0.0",
     "pydantic>=2.8.0",
+    "tomli>=1.2.0;python_version<'3.11'",
 ]
-dynamic = ["version"]
+version = "0.1.0"
 
 [project.optional-dependencies]
 dev = [
@@ -65,8 +66,7 @@ llm-proxifier = "llm_proxifier.cli:main"
 [tool.setuptools.packages.find]
 where = ["src"]
 
-[tool.setuptools.dynamic]
-version = {attr = "llm_proxifier._version.__version__"}
+# Version is now static in [project] section
 
 [tool.setuptools.package-data]
 "*" = ["py.typed"]
