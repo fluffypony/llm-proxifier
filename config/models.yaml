@@ -7,8 +7,7 @@
 # - The auto_start and preload settings are ignored
 # - All configured models appear as "available" in /v1/models endpoint
 #
-# To revert to legacy auto-start behavior, set environment variable:
-# ON_DEMAND_ONLY=false
+# To revert to legacy auto-start behavior, use: llm-proxifier start --no-on-demand
 #
 # Model Configuration Fields:
 # - port: Local port for the model server
@@ -28,7 +27,7 @@ models:
     priority: 1
     resource_group: "large-models"
     additional_args:
-      - "-c 32768"
+      - "-c 65536"
       - "-ngl -1"
       - "-b 2048"
       - "-t 8"
@@ -41,7 +40,7 @@ models:
     priority: 10
     resource_group: "lite-models"
     additional_args:
-      - "-c 16384"
+      - "-c 131072"
       - "-ngl -1"
       - "-b 4096"
       - "-t 8"
@@ -54,7 +53,7 @@ models:
     priority: 5
     resource_group: "medium-models"
     additional_args:
-      - "-c 32768"
+      - "-c 131072"
       - "-ngl -1"
       - "-b 3072"
       - "-t 8"
@@ -67,7 +66,7 @@ models:
     priority: 1
     resource_group: "large-models"
     additional_args:
-      - "-c 8192"
+      - "-c 16384"
       - "-ngl 30"
       - "-b 2048"
       - "-t 16"

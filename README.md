@@ -223,10 +223,72 @@ models:
 |----------|---------|-------------|
 | `PROXY_HOST` | `0.0.0.0` | Host to bind proxy server |
 | `PROXY_PORT` | `8000` | Port for proxy server |
-| `TIMEOUT_MINUTES` | `2` | Model inactivity timeout |
+| `TIMEOUT_MINUTES` | `5` | Model inactivity timeout |
 | `MAX_CONCURRENT_MODELS` | `4` | Maximum simultaneous models |
 | `CONFIG_PATH` | `./config/models.yaml` | Path to model configuration |
 | `LOG_LEVEL` | `INFO` | Logging verbosity |
+
+## 💻 Command Line Interface
+
+### Basic Commands
+
+```bash
+# Start the server (default: on-demand mode)
+llm-proxifier start
+
+# Start with legacy auto-start behavior  
+llm-proxifier start --no-on-demand
+
+# Start on custom port with dashboard
+llm-proxifier start --port 8080 --dashboard-port 3001
+
+# Check server status
+llm-proxifier status
+
+# List available models
+llm-proxifier models
+
+# Open dashboard in browser
+llm-proxifier dashboard
+
+# Validate configuration
+llm-proxifier config validate
+
+# Show configuration details
+llm-proxifier config show
+
+# Show version information
+llm-proxifier version
+```
+
+### Start Command Options
+
+```bash
+llm-proxifier start [OPTIONS]
+
+Options:
+  --host HOST                     Host to bind to (default: from config)
+  --port PORT                     Port to bind to (default: from config)  
+  --dashboard-port PORT           Dashboard port (default: from config)
+  --disable-auth                  Disable authentication
+  --disable-dashboard             Disable web dashboard
+  --on-demand-only               Enable on-demand loading (default)
+  --no-on-demand                 Use legacy auto-start behavior
+  --log-level LEVEL              Set log level (DEBUG, INFO, WARNING, ERROR)
+  --config PATH                  Path to models config file
+  --auth-config PATH             Path to auth config file
+```
+
+### Global Options
+
+```bash
+  --version                      Show version and exit
+  --config PATH                  Path to models config file
+  --auth-config PATH             Path to auth config file  
+  --host HOST                    Host to connect to
+  --port PORT                    Port to connect to
+  --log-level LEVEL              Set log level
+```
 
 ## 🔌 API Usage
 

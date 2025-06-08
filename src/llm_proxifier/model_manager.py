@@ -162,8 +162,8 @@ class ModelInstance:
             logging.info(f"Stopping model {self.config.name}")
             print(f"🛑 Stopping model {self.config.name}...", flush=True)
 
-            # Try graceful shutdown first
-            success = await graceful_shutdown(self.process, timeout=5)
+            # Try graceful shutdown first (15 second timeout)
+            success = await graceful_shutdown(self.process, timeout=15)
 
             if success:
                 logging.info(f"Model {self.config.name} stopped gracefully")
