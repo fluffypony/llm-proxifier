@@ -213,6 +213,7 @@ async def websocket_endpoint(websocket: WebSocket):
 
 # Data models for new endpoints
 class PriorityUpdateModel(BaseModel):
+    model_config = {"protected_namespaces": ()}
     model_priorities: Dict[str, int]
 
 
