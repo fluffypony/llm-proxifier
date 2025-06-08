@@ -39,7 +39,7 @@ class ProxyConfig:
     """Configuration for the proxy server."""
     host: str = "0.0.0.0"
     port: int = 8000
-    timeout_minutes: int = 2
+    timeout_minutes: int = 5
     health_check_interval: int = 30
     max_concurrent_models: int = 4
     log_level: str = "INFO"
@@ -77,7 +77,7 @@ class ConfigManager:
         return ProxyConfig(
             host=os.getenv("PROXY_HOST", "0.0.0.0"),
             port=int(os.getenv("PROXY_PORT", "8000")),
-            timeout_minutes=int(os.getenv("TIMEOUT_MINUTES", "2")),
+            timeout_minutes=int(os.getenv("TIMEOUT_MINUTES", "5")),
             health_check_interval=int(os.getenv("HEALTH_CHECK_INTERVAL", "30")),
             max_concurrent_models=int(os.getenv("MAX_CONCURRENT_MODELS", "4")),
             log_level=os.getenv("LOG_LEVEL", "INFO"),
