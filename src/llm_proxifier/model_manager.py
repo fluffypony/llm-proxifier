@@ -65,7 +65,7 @@ class ModelInstance:
                 logging.error(error_msg)
                 print(f"❌ ERROR: {error_msg}", flush=True)
                 return False
-            
+
             cmd = format_llama_cpp_command(self.config)
             logging.info(f"Starting model {self.config.name} with command: {' '.join(cmd)}")
             logging.info(f"Model file: {self.config.model_path}")
@@ -115,7 +115,7 @@ class ModelInstance:
                         comm_error_msg = f"Error reading subprocess output for {self.config.name}: {e}"
                         logging.error(comm_error_msg)
                         print(f"❌ {comm_error_msg}", flush=True)
-                
+
                 error_msg = f"Model {self.config.name} failed to start or health check failed"
                 logging.error(error_msg)
                 print(f"❌ ERROR: {error_msg}", flush=True)
@@ -128,7 +128,7 @@ class ModelInstance:
             error_msg = f"Error starting model {self.config.name}: {e}"
             logging.error(error_msg)
             print(f"❌ EXCEPTION: {error_msg}", flush=True)
-            
+
             # Try to capture subprocess output if available
             if self.process:
                 try:

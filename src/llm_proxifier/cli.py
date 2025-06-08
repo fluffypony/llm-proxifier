@@ -75,7 +75,7 @@ def cmd_start(args):
         os.environ["AUTH_ENABLED"] = "false"
     if args.disable_dashboard:
         os.environ["DASHBOARD_ENABLED"] = "false"
-    
+
     # Handle on-demand mode flags
     if args.no_on_demand:
         os.environ["ON_DEMAND_ONLY"] = "false"
@@ -314,9 +314,9 @@ Examples:
     start_parser.add_argument("--dashboard-port", type=int, help="Dashboard port")
     start_parser.add_argument("--disable-auth", action="store_true", help="Disable authentication")
     start_parser.add_argument("--disable-dashboard", action="store_true", help="Disable dashboard")
-    start_parser.add_argument("--on-demand-only", action="store_true", 
+    start_parser.add_argument("--on-demand-only", action="store_true",
                              help="Enable on-demand model loading only (default)")
-    start_parser.add_argument("--no-on-demand", action="store_true", 
+    start_parser.add_argument("--no-on-demand", action="store_true",
                              help="Disable on-demand mode, use legacy auto-start behavior")
     start_parser.set_defaults(func=cmd_start)
 

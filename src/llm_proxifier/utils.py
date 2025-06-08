@@ -58,7 +58,7 @@ def format_llama_cpp_command(config: ModelConfig) -> List[str]:
     """Build command line arguments for llama.cpp server."""
     # Expand ~ to home directory in model path
     expanded_model_path = os.path.expanduser(config.model_path)
-    
+
     # Only add essential arguments - let user control everything else via additional_args
     cmd = [
         "llama-server",
@@ -69,7 +69,7 @@ def format_llama_cpp_command(config: ModelConfig) -> List[str]:
     # Check if user has specified --host in their additional_args
     user_specified_host = False
     user_args = []
-    
+
     for arg in config.additional_args:
         if ' ' in arg:
             # Split arguments that contain spaces (e.g., "-c 16384" -> ["-c", "16384"])
@@ -84,11 +84,11 @@ def format_llama_cpp_command(config: ModelConfig) -> List[str]:
             # Check if this is a --host argument
             if arg == "--host":
                 user_specified_host = True
-    
+
     # Add default --host for security if user hasn't specified one
     if not user_specified_host:
         cmd.extend(["--host", "127.0.0.1"])
-    
+
     # Add all user-specified arguments
     cmd.extend(user_args)
 

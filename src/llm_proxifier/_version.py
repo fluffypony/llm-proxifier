@@ -18,7 +18,7 @@ def get_version() -> str:
         current_dir = os.path.dirname(os.path.abspath(__file__))
         project_root = os.path.dirname(os.path.dirname(current_dir))
         toml_path = os.path.join(project_root, "pyproject.toml")
-        
+
         if os.path.exists(toml_path):
             with open(toml_path, "rb") as f:
                 pyproject = tomllib.load(f)
@@ -27,12 +27,12 @@ def get_version() -> str:
                     return version
     except Exception:
         pass
-    
+
     # Fallback to git version
     git_version = _get_git_version()
     if git_version:
         return git_version
-    
+
     # Final fallback
     return "0.1.0"
 
