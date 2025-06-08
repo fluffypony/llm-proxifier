@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import os
 import socket
 import subprocess
 import time
@@ -54,9 +55,12 @@ async def wait_for_server(url: str, timeout: int = 60) -> bool:
 
 def format_llama_cpp_command(config: ModelConfig) -> List[str]:
     """Build command line arguments for llama.cpp server."""
+    # Expand ~ to home directory in model path
+    expanded_model_path = os.path.expanduser(config.model_path)
+    
     cmd = [
         "llama-server",
-        "--model", config.model_path,
+        "--model", expanded_model_path,
         "--port", str(config.port),
         "--ctx-size", str(config.context_length),
         "--n-gpu-layers", str(config.gpu_layers),

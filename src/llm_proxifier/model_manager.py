@@ -58,9 +58,10 @@ class ModelInstance:
             return False
 
         try:
-            # Check if model file exists
-            if not os.path.exists(self.config.model_path):
-                error_msg = f"Model file not found: {self.config.model_path}"
+            # Check if model file exists (expand ~ to home directory)
+            expanded_path = os.path.expanduser(self.config.model_path)
+            if not os.path.exists(expanded_path):
+                error_msg = f"Model file not found: {self.config.model_path} (expanded: {expanded_path})"
                 logging.error(error_msg)
                 print(f"❌ ERROR: {error_msg}", flush=True)
                 return False

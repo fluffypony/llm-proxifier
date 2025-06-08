@@ -30,8 +30,11 @@ class ModelConfig:
             raise ValueError(f"Port {self.port} is out of valid range")
 
         # Only validate model path if it's not a placeholder path
-        if not self.model_path.startswith("./models/") and not os.path.exists(self.model_path):
-            raise ValueError(f"Model path {self.model_path} does not exist")
+        if not self.model_path.startswith("./models/"):
+            # Expand ~ to home directory for validation
+            expanded_path = os.path.expanduser(self.model_path)
+            if not os.path.exists(expanded_path):
+                raise ValueError(f"Model path {self.model_path} does not exist (expanded: {expanded_path})")
 
 
 @dataclass

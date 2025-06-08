@@ -24,7 +24,7 @@
 models:
   qwen-32b:
     port: 11001
-    model_path: "./models/qwen-32b/qwen2.5-coder-32b-instruct-q8_0.gguf"
+    model_path: "~/models/qwen-32b/qwen2.5-coder-32b-instruct-q8_0.gguf"
     context_length: 32768
     gpu_layers: -1
     auto_start: false
@@ -37,7 +37,7 @@ models:
 
   deepseek-lite:
     port: 11002
-    model_path: "./models/deepseek-lite/DeepSeek-Coder-V2-Lite-Instruct-Q4_K_M.gguf"
+    model_path: "~/models/deepseek-lite/DeepSeek-Coder-V2-Lite-Instruct-Q4_K_M.gguf"
     context_length: 16384
     gpu_layers: -1
     auto_start: true
@@ -50,7 +50,7 @@ models:
 
   qwen-7b:
     port: 11003
-    model_path: "./models/qwen-7b/qwen2.5-coder-7b-instruct-q5_k_m.gguf"
+    model_path: "~/models/qwen-7b/qwen2.5-coder-7b-instruct-q5_k_m.gguf"
     context_length: 32768
     gpu_layers: -1
     auto_start: true
@@ -63,7 +63,7 @@ models:
 
   llama-70b:
     port: 11004
-    model_path: "./models/llama-70b/meta-llama_Llama-4-Scout-17B-16E-Instruct-Q8_0-00001-of-00003.gguf"
+    model_path: "~/models/llama-70b/meta-llama_Llama-4-Scout-17B-16E-Instruct-Q8_0-00001-of-00003.gguf"
     context_length: 8192
     gpu_layers: 30
     auto_start: false
