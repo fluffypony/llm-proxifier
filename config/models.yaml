@@ -1,3 +1,26 @@
+# LLM Proxifier Model Configuration
+#
+# This configuration runs in ON-DEMAND mode by default (on_demand_only: true).
+# In on-demand mode:
+# - Models start automatically when first requested (cold start may take 1-3 minutes)
+# - Models shut down after timeout_minutes of inactivity (default: 5 minutes)
+# - The auto_start and preload settings are ignored
+# - All configured models appear as "available" in /v1/models endpoint
+#
+# To revert to legacy auto-start behavior, set environment variable:
+# ON_DEMAND_ONLY=false
+#
+# Model Configuration Fields:
+# - port: Local port for the model server
+# - model_path: Path to the GGUF model file
+# - context_length: Maximum context window size
+# - gpu_layers: Number of layers to offload to GPU (-1 = all)
+# - auto_start: [IGNORED in on-demand mode] Start model on server startup
+# - preload: [IGNORED in on-demand mode] Keep model always loaded
+# - priority: Loading priority (higher = loaded first when concurrent limit hit)
+# - resource_group: Logical grouping for batch operations
+# - additional_args: Extra arguments passed to llama.cpp server
+
 models:
   qwen-32b:
     port: 11001
