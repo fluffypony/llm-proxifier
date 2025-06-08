@@ -47,6 +47,7 @@ class ProxyConfig:
     dashboard_port: int = 3000
     dashboard_enabled: bool = True
     auth_enabled: bool = True
+    on_demand_only: bool = True
 
     def __post_init__(self):
         """Validate configuration after initialization."""
@@ -84,7 +85,8 @@ class ConfigManager:
             config_path=self.config_path,
             dashboard_port=int(os.getenv("DASHBOARD_PORT", "3000")),
             dashboard_enabled=os.getenv("DASHBOARD_ENABLED", "true").lower() == "true",
-            auth_enabled=os.getenv("AUTH_ENABLED", "true").lower() == "true"
+            auth_enabled=os.getenv("AUTH_ENABLED", "true").lower() == "true",
+            on_demand_only=os.getenv("ON_DEMAND_ONLY", "true").lower() == "true"
         )
 
     def load_model_configs(self) -> Dict[str, ModelConfig]:

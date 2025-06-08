@@ -346,20 +346,48 @@ class ModelManager:
             self.logger.info("Stopped model cleanup task")
 
     async def start_all_auto_models(self):
-        """Start all models with auto_start=True, sorted by priority.
-        
-        NOTE: This method is disabled in on-demand mode.
-        Models will start automatically when first requested.
-        """
-        self.logger.info("Auto-start disabled: using on-demand model loading")
+        """Start all models with auto_start=True, sorted by priority."""
+        auto_start_configs = [
+            config for config in self.configs.values()
+            if getattr(config, 'auto_start', False)
+        ]
+
+        # Sort by priority (higher priority first)
+        auto_start_configs.sort(key=lambda x: getattr(x, 'priority', 5), reverse=True)
+
+        self.logger.info(f"Starting {len(auto_start_configs)} auto-start models")
+
+        for config in auto_start_configs:
+            try:
+                self.logger.info(f"Auto-starting model {config.name} (priority {config.priority})")
+                instance = await self.get_or_start_model(config.name)
+                if instance:
+                    self.logger.info(f"Auto-started model {config.name} successfully")
+                else:
+                    self.logger.error(f"Failed to auto-start model {config.name}")
+            except Exception as e:
+                self.logger.error(f"Error auto-starting model {config.name}: {e}")
 
     async def preload_models(self):
-        """Ensure all models with preload=True are running.
-        
-        NOTE: This method is disabled in on-demand mode.
-        Models will start automatically when first requested.
-        """
-        self.logger.info("Preload disabled: using on-demand model loading")
+        """Ensure all models with preload=True are running."""
+        preload_configs = [
+            config for config in self.configs.values()
+            if getattr(config, 'preload', False)
+        ]
+
+        self.logger.info(f"Preloading {len(preload_configs)} models")
+
+        for config in preload_configs:
+            try:
+                if config.name not in self.models or not self.models[config.name].is_ready:
+                    self.logger.info(f"Preloading model {config.name}")
+                    instance = await self.get_or_start_model(config.name)
+                    if instance:
+                        self.logger.info(f"Preloaded model {config.name} successfully")
+                    else:
+                        self.logger.error(f"Failed to preload model {config.name}")
+            except Exception as e:
+                self.logger.error(f"Error preloading model {config.name}: {e}")
 
     def get_models_by_priority(self) -> List[ModelConfig]:
         """Return models sorted by priority (higher priority first)."""
