@@ -60,13 +60,16 @@ class ModelInstance:
         try:
             # Check if model file exists
             if not os.path.exists(self.config.model_path):
-                logging.error(f"Model file not found: {self.config.model_path}")
+                error_msg = f"Model file not found: {self.config.model_path}"
+                logging.error(error_msg)
+                print(f"❌ ERROR: {error_msg}", flush=True)
                 return False
             
             cmd = format_llama_cpp_command(self.config)
             logging.info(f"Starting model {self.config.name} with command: {' '.join(cmd)}")
             logging.info(f"Model file: {self.config.model_path}")
             logging.info(f"Working directory: {os.getcwd()}")
+            print(f"🚀 Starting model {self.config.name} on port {self.config.port}...", flush=True)
 
             # Start the process
             self.process = subprocess.Popen(
@@ -88,6 +91,7 @@ class ModelInstance:
                 if queue_manager:
                     queue_manager.set_model_state(self.config.name, ModelState.RUNNING)
                 logging.info(f"Model {self.config.name} started successfully on port {self.config.port}")
+                print(f"✅ Model {self.config.name} started successfully on port {self.config.port}", flush=True)
                 return True
             else:
                 # Capture and log subprocess output for debugging
@@ -95,30 +99,47 @@ class ModelInstance:
                     try:
                         stdout, stderr = self.process.communicate(timeout=5)
                         if stdout:
-                            logging.error(f"Model {self.config.name} stdout: {stdout}")
+                            stdout_msg = f"Model {self.config.name} stdout: {stdout}"
+                            logging.error(stdout_msg)
+                            print(f"📝 {stdout_msg}", flush=True)
                         if stderr:
-                            logging.error(f"Model {self.config.name} stderr: {stderr}")
+                            stderr_msg = f"Model {self.config.name} stderr: {stderr}"
+                            logging.error(stderr_msg)
+                            print(f"❌ {stderr_msg}", flush=True)
                     except subprocess.TimeoutExpired:
-                        logging.error(f"Model {self.config.name} process did not terminate cleanly")
+                        timeout_msg = f"Model {self.config.name} process did not terminate cleanly"
+                        logging.error(timeout_msg)
+                        print(f"⏰ {timeout_msg}", flush=True)
                     except Exception as e:
-                        logging.error(f"Error reading subprocess output for {self.config.name}: {e}")
+                        comm_error_msg = f"Error reading subprocess output for {self.config.name}: {e}"
+                        logging.error(comm_error_msg)
+                        print(f"❌ {comm_error_msg}", flush=True)
                 
-                logging.error(f"Model {self.config.name} failed to start or health check failed")
+                error_msg = f"Model {self.config.name} failed to start or health check failed"
+                logging.error(error_msg)
+                print(f"❌ ERROR: {error_msg}", flush=True)
                 if queue_manager:
                     queue_manager.set_model_state(self.config.name, ModelState.STOPPED)
                 await self.stop()
                 return False
 
         except Exception as e:
-            logging.error(f"Error starting model {self.config.name}: {e}")
+            error_msg = f"Error starting model {self.config.name}: {e}"
+            logging.error(error_msg)
+            print(f"❌ EXCEPTION: {error_msg}", flush=True)
+            
             # Try to capture subprocess output if available
             if self.process:
                 try:
                     stdout, stderr = self.process.communicate(timeout=5)
                     if stdout:
-                        logging.error(f"Model {self.config.name} stdout: {stdout}")
+                        stdout_msg = f"Model {self.config.name} stdout: {stdout}"
+                        logging.error(stdout_msg)
+                        print(f"📝 {stdout_msg}", flush=True)
                     if stderr:
-                        logging.error(f"Model {self.config.name} stderr: {stderr}")
+                        stderr_msg = f"Model {self.config.name} stderr: {stderr}"
+                        logging.error(stderr_msg)
+                        print(f"❌ {stderr_msg}", flush=True)
                 except:
                     pass  # Don't let subprocess logging errors mask the original error
             if queue_manager:
@@ -138,14 +159,17 @@ class ModelInstance:
 
         try:
             logging.info(f"Stopping model {self.config.name}")
+            print(f"🛑 Stopping model {self.config.name}...", flush=True)
 
             # Try graceful shutdown first
             success = await graceful_shutdown(self.process, timeout=5)
 
             if success:
                 logging.info(f"Model {self.config.name} stopped gracefully")
+                print(f"✅ Model {self.config.name} stopped gracefully", flush=True)
             else:
                 logging.warning(f"Model {self.config.name} was force killed")
+                print(f"⚠️  Model {self.config.name} was force killed", flush=True)
 
             self.process = None
             self.is_ready = False
