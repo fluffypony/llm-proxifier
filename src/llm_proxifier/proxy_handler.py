@@ -331,18 +331,31 @@ class ProxyHandler:
             model_info = {
                 "id": name,
                 "object": "model",
-                "created": 0,  # Unix timestamp - would be model creation time
-                "owned_by": "llama-cpp",
-                "permission": [],
+                "created": int(time.time()),  # Current timestamp for availability
+                "owned_by": "llm-proxifier",
+                "permission": [
+                    {
+                        "id": f"modelperm-{name}",
+                        "object": "model_permission",
+                        "created": int(time.time()),
+                        "allow_create_engine": True,
+                        "allow_sampling": True,
+                        "allow_logprobs": True,
+                        "allow_search_indices": False,
+                        "allow_view": True,
+                        "allow_fine_tuning": False,
+                        "organization": "*",
+                        "group": None,
+                        "is_blocking": False
+                    }
+                ],
                 "root": name,
                 "parent": None
             }
 
-            # Add status information as metadata
-            if status.get("status") == "running":
-                model_info["status"] = "available"
-            else:
-                model_info["status"] = "unavailable"
+            # In on-demand mode, all configured models are available
+            # They can be started when needed
+            model_info["status"] = "available"
 
             models.append(model_info)
 
