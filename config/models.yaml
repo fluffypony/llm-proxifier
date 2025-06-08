@@ -20,6 +20,7 @@
 # - priority: Loading priority (higher = loaded first when concurrent limit hit)
 # - resource_group: Logical grouping for batch operations
 # - additional_args: ALL arguments passed to llama-server (except --model and --port)
+#                   Can use: ["-c 16384", "-ngl -1"] or ["-c", "16384", "-ngl", "-1"]
 
 models:
   qwen-32b:
@@ -32,16 +33,11 @@ models:
     priority: 1
     resource_group: "large-models"
     additional_args:
-      - "-c"
-      - "32768"
-      - "-ngl"
-      - "-1"
-      - "--host"
-      - "127.0.0.1"
-      - "-b"
-      - "2048"
-      - "-t"
-      - "8"
+      - "-c 32768"
+      - "-ngl -1"
+      - "--host 127.0.0.1"
+      - "-b 2048"
+      - "-t 8"
 
   deepseek-lite:
     port: 11002
@@ -53,16 +49,11 @@ models:
     priority: 10
     resource_group: "lite-models"
     additional_args:
-      - "-c"
-      - "16384"
-      - "-ngl"
-      - "-1"
-      - "--host"
-      - "127.0.0.1"
-      - "-b"
-      - "4096"
-      - "-t"
-      - "8"
+      - "-c 16384"
+      - "-ngl -1"
+      - "--host 127.0.0.1"
+      - "-b 4096"
+      - "-t 8"
 
   qwen-7b:
     port: 11003
@@ -74,16 +65,11 @@ models:
     priority: 5
     resource_group: "medium-models"
     additional_args:
-      - "-c"
-      - "32768"
-      - "-ngl"
-      - "-1"
-      - "--host"
-      - "127.0.0.1"
-      - "-b"
-      - "3072"
-      - "-t"
-      - "8"
+      - "-c 32768"
+      - "-ngl -1"
+      - "--host 127.0.0.1"
+      - "-b 3072"
+      - "-t 8"
 
   llama-70b:
     port: 11004
@@ -95,13 +81,8 @@ models:
     priority: 1
     resource_group: "large-models"
     additional_args:
-      - "-c"
-      - "8192"
-      - "-ngl"
-      - "30"
-      - "--host"
-      - "127.0.0.1"
-      - "-b"
-      - "2048"
-      - "-t"
-      - "16"
+      - "-c 8192"
+      - "-ngl 30"
+      - "--host 127.0.0.1"
+      - "-b 2048"
+      - "-t 16"

@@ -3,6 +3,7 @@
 import asyncio
 import json
 import os
+import shlex
 import socket
 import subprocess
 import time
@@ -65,8 +66,14 @@ def format_llama_cpp_command(config: ModelConfig) -> List[str]:
         "--port", str(config.port)
     ]
 
-    # Add all user-specified arguments
-    cmd.extend(config.additional_args)
+    # Add all user-specified arguments, handling spaces in arguments
+    for arg in config.additional_args:
+        if ' ' in arg:
+            # Split arguments that contain spaces (e.g., "-c 16384" -> ["-c", "16384"])
+            cmd.extend(shlex.split(arg))
+        else:
+            # Single argument, add as-is
+            cmd.append(arg)
 
     return cmd
 
